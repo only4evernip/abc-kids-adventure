@@ -63,6 +63,11 @@ def render_report(result: Dict[str, Any]) -> str:
             for bucket in buckets:
                 funds = " / ".join(bucket.get('funds', []) or [])
                 lines.append(f"  - {bucket.get('bucket_name')}：{bucket.get('bucket_weight')}%｜{funds}")
+        change = allocation.get('allocation_change', {}) or {}
+        if change:
+            lines.append(f"- **今日是否需要调仓：** {'需要' if change.get('needs_rebalance') else '暂不需要'}")
+            lines.append(f"- **昨日对比：** {change.get('change_summary', '')}")
+            lines.append(f"- **调仓说明：** {change.get('change_reasoning', '')}")
     lines.append("")
     lines.append("## 主线与轮动观察")
     for s in sectors[:5]:

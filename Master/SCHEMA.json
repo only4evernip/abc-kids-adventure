@@ -200,6 +200,27 @@
             },
             "required": ["bucket_name", "bucket_weight", "bucket_type", "funds"]
           }
+        },
+        "allocation_change": {
+          "type": "object",
+          "properties": {
+            "needs_rebalance": { "type": "boolean" },
+            "change_summary": { "type": "string" },
+            "change_reasoning": { "type": "string" },
+            "bucket_changes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "previous": { "type": "number" },
+                  "current": { "type": "number" },
+                  "delta": { "type": "number" }
+                },
+                "required": ["name", "previous", "current", "delta"]
+              }
+            }
+          }
         }
       }
     }

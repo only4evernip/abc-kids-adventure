@@ -46,6 +46,65 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def load_previous_result(path: Path) -> Dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def build_allocation_change(current: Dict[str, Any], previous: Dict[str, Any] | None) -> Dict[str, Any]:
+    current_plan = current.get("allocation_plan", {}) or {}
+    previous_plan = (previous or {}).get("allocation_plan", {}) or {}
+
+    if not current_plan or not previous_plan:
+        return {
+            "needs_rebalance": False,
+            "change_summary": "无昨日基线，今日先作为初始配置基准。",
+            "change_reasoning": "当前缺少上一份配置结果，先记录今日配置，不做主动调仓比较。",
+            "bucket_changes": [],
+        }
+
+    tracked_keys = [
+        ("total_equity_target", "总权益目标仓位"),
+        ("true_defensive_weight", "真防守"),
+        ("equity_defensive_weight", "权益防守"),
+        ("core_weight", "核心仓"),
+        ("satellite_weight", "卫星仓"),
+        ("a_share_weight", "A股"),
+        ("h_share_weight", "H股"),
+    ]
+    bucket_changes = []
+    for key, label in tracked_keys:
+        cur = float(current_plan.get(key, 0) or 0)
+        prev = float(previous_plan.get(key, 0) or 0)
+        diff = round(cur - prev, 2)
+        if diff != 0:
+            bucket_changes.append({
+                "name": label,
+                "previous": prev,
+                "current": cur,
+                "delta": diff,
+            })
+
+    needs_rebalance = len(bucket_changes) > 0
+    if needs_rebalance:
+        summary = "；".join([f"{x['name']} {x['previous']}%→{x['current']}%" for x in bucket_changes])
+        reasoning = "今日配置与昨日相比已有变化，应按新权重执行再平衡。"
+    else:
+        summary = "今日配置与昨日一致，无需主动调仓。"
+        reasoning = "主要仓位结构未发生变化，继续持有当前配置即可。"
+
+    return {
+        "needs_rebalance": needs_rebalance,
+        "change_summary": summary,
+        "change_reasoning": reasoning,
+        "bucket_changes": bucket_changes,
+    }
+
+
 def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
     market = input_data.get("market_snapshot", {})
     sectors = input_data.get("theme_snapshot", [])
@@ -464,6 +523,10 @@ def main() -> int:
                     input_warnings.append("model_call_failed_fallback_to_local_rules")
                 else:
                     raise RuntimeError(f"model path failed after retries: {last_error}")
+
+        previous_result = load_previous_result(args.out_dir / "decision.json")
+        if result.get("allocation_plan"):
+            result["allocation_plan"]["allocation_change"] = build_allocation_change(result, previous_result)
 
         warnings = input_warnings + validate_result(result, context["schema"])
 
