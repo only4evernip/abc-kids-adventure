@@ -43,6 +43,11 @@ python3 Master/main.py \
 4. 今天最大风险
 5. 明天最该盯的点
 
+### Day 2 之后的文件节奏
+- `Master/out-daily/`：永远放**最新**结果（覆盖）
+- `Master/out-daily/current-review.md`：永远放**当前最新复盘草稿**
+- `Master/reviews/day1-review.md` ~ `day5-review.md`：放 **3–5 天观察期存档**
+
 ---
 
 # 这是什么

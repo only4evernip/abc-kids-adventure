@@ -163,6 +163,39 @@ python3 Master/main.py \
 - `Master/out-daily/daily-report.md`
 - `Master/out-daily/candidate-pool.md`
 
+### 命名规则与文件节奏
+从 Day 2 开始，分成两层：
+
+#### A. 滚动最新（永远覆盖）
+放在：`Master/out-daily/`
+
+始终覆盖这几个文件：
+- `decision.json`
+- `logic-warnings.json`
+- `daily-report.md`
+- `candidate-pool.md`
+- `current-review.md`  ← 当前最新一份复盘草稿
+
+用途：
+- 方便每天只看“最新”结果
+- 不需要天天改命令
+
+#### B. 观察存档（按 Day 保存）
+放在：`Master/reviews/`
+
+文件命名固定为：
+- `day1-review.md`
+- `day2-review.md`
+- `day3-review.md`
+- `day4-review.md`
+- `day5-review.md`
+
+如果更想按日期看，也允许并行保留：
+- `2026-03-10-review.md`
+- `2026-03-11-review.md`
+
+但 **3–5 天观察阶段的主命名优先用 Day 编号**，避免日期看着散。
+
 ### 用户只看什么
 当前阶段，用户只需要看 `daily-report.md` 里的 **当日复盘判断 5 句**：
 1. 今天环境判断
@@ -182,6 +215,44 @@ python3 Master/main.py \
 - 主线识别是否漂移
 - 板块排序是否符合市场直觉
 - 本地 fallback 是否过于保守或过于激进
+
+### Day 2 之后的固定流程
+每天收盘后按这个顺序：
+
+#### Step 1：跑主流程
+```bash
+cd /Users/axiao/.openclaw/workspace
+
+python3 Master/main.py \
+  --source live-akshare \
+  --out-dir Master/out-daily \
+  --fallback-example-output-on-fail
+```
+
+#### Step 2：先读 `Master/out-daily/daily-report.md`
+只看前面的 5 句复盘判断。
+
+#### Step 3：复制一份当天复盘底稿
+- Day 2 → `Master/reviews/day2-review.md`
+- Day 3 → `Master/reviews/day3-review.md`
+- Day 4 → `Master/reviews/day4-review.md`
+- Day 5 → `Master/reviews/day5-review.md`
+
+并同步覆盖：
+- `Master/out-daily/current-review.md`
+
+#### Step 4：每天只补 4 个地方
+- 环境判断是否准确
+- 主线识别是否准确
+- 今天最大误判
+- 明天最该修的规则点
+
+#### Step 5：第 3 天和第 5 天做一次横向对比
+对比：
+- 主线是否频繁漂移
+- 哪类板块总被高估
+- 哪类风险总被低估
+- 是否要修改 `PROMPT.md` / `SCORING.md` / `TAGING_RULES.md`
 
 ## 模式 1：收盘后主流程（推荐）
 这是当前最适合 Master 的方式。
