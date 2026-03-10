@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+from builder import load_and_build, validate_input_shape
 from judge import build_messages, call_openai_compatible, extract_json
 from renderer import render_candidate_pool, render_report
 from validator import validate_result
@@ -28,15 +29,6 @@ def load_json(path: Path) -> Any:
 
 def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
-
-
-def load_input(path: Path) -> Dict[str, Any]:
-    data = load_json(path)
-    required = ["market_snapshot", "theme_snapshot", "stock_snapshot"]
-    missing = [k for k in required if k not in data]
-    if missing:
-        raise ValueError(f"input missing required keys: {missing}")
-    return data
 
 
 def load_master_context() -> Dict[str, Any]:
@@ -65,7 +57,8 @@ def main() -> int:
     args = parse_args()
     ensure_dir(args.out_dir)
 
-    input_data = load_input(args.input)
+    input_data = load_and_build(args.input)
+    input_warnings = validate_input_shape(input_data)
     context = load_master_context()
 
     if args.use_example_output:
@@ -75,7 +68,7 @@ def main() -> int:
         raw_text = call_openai_compatible(args.model, messages)
         result = extract_json(raw_text)
 
-    warnings = validate_result(result, context["schema"])
+    warnings = input_warnings + validate_result(result, context["schema"])
 
     write_json(args.out_dir / "decision.json", result)
     write_json(args.out_dir / "logic-warnings.json", warnings)
