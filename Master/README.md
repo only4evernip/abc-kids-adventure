@@ -54,6 +54,13 @@ python3 Master/main.py \
 - 权益防守优先使用 **红利低波 / 价值** 风格
 - H股核心与H股卫星默认更克制，除非趋势确认，否则不轻易高配
 
+### 指数策略骨架
+当前已单独拆出 `INDEX_STRATEGY_RULES.md`，用于沉淀：
+- 环境分档
+- 真防守 / 权益防守 / 核心仓 / 卫星仓规则
+- A股 / H股 分配原则
+- 调仓阈值与验证闭环
+
 ---
 
 # 这是什么
@@ -119,6 +126,7 @@ Master/
 ├── REPORT_TEMPLATE.md          # 日报模板（渲染层）
 ├── CANDIDATE_TEMPLATE.md       # 候选池模板（渲染层）
 ├── MAIN_PY_DESIGN.md           # main.py 原型设计说明
+├── INDEX_STRATEGY_RULES.md     # 指数策略规则骨架
 ├── main.py                     # 最小可跑入口
 ├── judge.py                    # 模型调用层
 ├── validator.py                # 校验层
