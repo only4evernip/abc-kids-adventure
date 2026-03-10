@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from builder import load_and_build, validate_input_shape
+from collector import CollectorConfig, collect_input
 from judge import build_messages, call_openai_compatible, extract_json
 from renderer import render_candidate_pool, render_report
 from validator import validate_result
@@ -49,6 +50,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="input JSON path")
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT, help="output directory")
     parser.add_argument("--model", default=os.getenv("MASTER_MODEL", "gpt-4o-mini"), help="LLM model")
+    parser.add_argument("--source", default="file", choices=["file", "example", "live"], help="input source mode")
     parser.add_argument("--use-example-output", action="store_true", help="skip API call and use examples/output-example.json")
     return parser.parse_args()
 
@@ -57,7 +59,11 @@ def main() -> int:
     args = parse_args()
     ensure_dir(args.out_dir)
 
-    input_data = load_and_build(args.input)
+    if args.source == "file":
+        input_data = load_and_build(args.input)
+    else:
+        collected = collect_input(CollectorConfig(source=args.source))
+        input_data = collected
     input_warnings = validate_input_shape(input_data)
     context = load_master_context()
 
