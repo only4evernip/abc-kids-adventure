@@ -200,6 +200,7 @@ class AkshareCollector(BaseCollector):
         for symbol in symbols:
             try:
                 df = self.ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="")
+                info_df = self.ak.stock_individual_info_em(symbol=symbol)
                 if df is None or len(df) == 0:
                     continue
                 tail = df.tail(60).reset_index(drop=True)
@@ -211,10 +212,15 @@ class AkshareCollector(BaseCollector):
                 ma20 = sum(closes[-20:]) / min(len(closes), 20) if closes else None
                 ma60 = sum(closes[-60:]) / min(len(closes), 60) if closes else None
 
+                info_map = {}
+                if info_df is not None and len(info_df) > 0:
+                    for _, info_row in info_df.iterrows():
+                        info_map[str(info_row.get("item"))] = info_row.get("value")
+
                 rows.append(
                     {
                         "symbol": str(row.get("股票代码")),
-                        "name": None,
+                        "name": info_map.get("股票简称"),
                         "close_price": row.get("收盘"),
                         "open_price": row.get("开盘"),
                         "high_price": row.get("最高"),
@@ -223,8 +229,8 @@ class AkshareCollector(BaseCollector):
                         "turnover_amount": row.get("成交额"),
                         "turnover_rate": row.get("换手率"),
                         "volume_ratio": None,
-                        "circulating_market_cap": None,
-                        "total_market_cap": None,
+                        "circulating_market_cap": info_map.get("流通市值"),
+                        "total_market_cap": info_map.get("总市值"),
                         "board_count": None,
                         "days_since_last_limit_up": None,
                         "is_recent_high_stock": None,
@@ -237,7 +243,7 @@ class AkshareCollector(BaseCollector):
                         "limit_down_flag": None,
                         "blowup_flag": None,
                         "sealed_order_strength": None,
-                        "industry": None,
+                        "industry": info_map.get("行业"),
                         "concept_tags": [],
                         "main_theme_name": None,
                     }
