@@ -184,6 +184,22 @@
         "risk_controls": {
           "type": "array",
           "items": { "type": "string" }
+        },
+        "execution_buckets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "bucket_name": { "type": "string" },
+              "bucket_weight": { "type": "number" },
+              "bucket_type": { "type": "string" },
+              "funds": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["bucket_name", "bucket_weight", "bucket_type", "funds"]
+          }
         }
       }
     }

@@ -232,6 +232,64 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
     if true_defensive_weight > 0:
         fund_pool_focus.append("真防守池：货币基金 / 短债基金 / 同业存单指数基金")
 
+    a_core_weight = round(core_weight * a_share_weight / 100, 2)
+    h_core_weight = round(core_weight * h_share_weight / 100, 2)
+    a_def_weight = round(equity_defensive_weight * a_share_weight / 100, 2)
+    h_def_weight = round(equity_defensive_weight * h_share_weight / 100, 2)
+    a_sat_weight = round(satellite_weight * a_share_weight / 100, 2)
+    h_sat_weight = round(satellite_weight * h_share_weight / 100, 2)
+
+    execution_buckets = []
+    if true_defensive_weight > 0:
+        execution_buckets.append({
+            "bucket_name": "真防守池",
+            "bucket_weight": true_defensive_weight,
+            "bucket_type": "defensive",
+            "funds": ["货币基金", "短债基金", "同业存单指数基金"],
+        })
+    if a_def_weight > 0:
+        execution_buckets.append({
+            "bucket_name": "A股权益防守池",
+            "bucket_weight": a_def_weight,
+            "bucket_type": "equity_defensive",
+            "funds": ["中证红利ETF", "红利低波ETF", "央企价值ETF"],
+        })
+    if h_def_weight > 0:
+        execution_buckets.append({
+            "bucket_name": "H股权益防守池",
+            "bucket_weight": h_def_weight,
+            "bucket_type": "equity_defensive",
+            "funds": ["港股高股息ETF", "恒生红利ETF"],
+        })
+    if a_core_weight > 0:
+        execution_buckets.append({
+            "bucket_name": "A股核心池",
+            "bucket_weight": a_core_weight,
+            "bucket_type": "core",
+            "funds": ["沪深300ETF", "中证A500ETF"],
+        })
+    if h_core_weight > 0:
+        execution_buckets.append({
+            "bucket_name": "H股核心池",
+            "bucket_weight": h_core_weight,
+            "bucket_type": "core",
+            "funds": ["恒生指数ETF", "恒生国企ETF"],
+        })
+    if a_sat_weight > 0:
+        execution_buckets.append({
+            "bucket_name": "A股卫星池",
+            "bucket_weight": a_sat_weight,
+            "bucket_type": "satellite",
+            "funds": ["中证1000指增", "中证500指增"],
+        })
+    if h_sat_weight > 0:
+        execution_buckets.append({
+            "bucket_name": "H股卫星池",
+            "bucket_weight": h_sat_weight,
+            "bucket_type": "satellite",
+            "funds": ["恒生科技ETF", "中概互联网ETF"],
+        })
+
     allocation_plan = {
         "plan_reasoning": f"先看配置结论：当前总权益目标仓位 {total_equity_target}% 。依据是环境 {environment_label}、情绪 {emotion_cycle}、主线 {main_theme} 和风险标记 {', '.join(risk_flags)}。",
         "total_equity_target": total_equity_target,
@@ -249,6 +307,7 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
             "卫星仓默认低配，只有趋势与波动同时配合时再提高",
             "组合新增仓位优先投向核心ETF，不优先投高弹性资产",
         ],
+        "execution_buckets": execution_buckets,
     }
 
     return {

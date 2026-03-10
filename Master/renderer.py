@@ -57,6 +57,12 @@ def render_report(result: Dict[str, Any]) -> str:
             lines.append("- **关注基金池：**")
             for item in pool:
                 lines.append(f"  - {item}")
+        buckets = allocation.get('execution_buckets', []) or []
+        if buckets:
+            lines.append("- **执行清单：**")
+            for bucket in buckets:
+                funds = " / ".join(bucket.get('funds', []) or [])
+                lines.append(f"  - {bucket.get('bucket_name')}：{bucket.get('bucket_weight')}%｜{funds}")
     lines.append("")
     lines.append("## 主线与轮动观察")
     for s in sectors[:5]:
