@@ -24,6 +24,25 @@ Master 当前已切到 **指数优先模式**：
 也就是说，现阶段重点是：
 > **先把环境判断、主线识别、情绪强弱做稳，再考虑恢复个股层。**
 
+### 当前默认日常命令
+
+```bash
+cd /Users/axiao/.openclaw/workspace
+
+python3 Master/main.py \
+  --source live-akshare \
+  --out-dir Master/out-daily \
+  --fallback-example-output-on-fail
+```
+
+### 当前默认输出口径
+用户当前默认只看 `daily-report.md` 里的 5 句：
+1. 今天环境判断
+2. 今天主线识别
+3. 今天最有效信号
+4. 今天最大风险
+5. 明天最该盯的点
+
 ---
 
 # 这是什么

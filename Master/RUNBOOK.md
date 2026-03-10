@@ -131,6 +131,58 @@ LLM 输出后，先做两步检查：
 
 # 三、推荐的日常运行节奏
 
+## 当前默认：3–5 天实盘观察模式（指数模式）
+
+Master 现在默认不做个股筛选，进入 **指数 / 主线 / 情绪** 观察模式。
+
+### 每日运行时间
+- **收盘后 15:30 - 18:00** 跑一次主流程
+- 暂不要求盘中频繁刷新
+
+### 固定运行命令
+在工作区执行：
+
+```bash
+cd /Users/axiao/.openclaw/workspace
+
+python3 Master/main.py \
+  --source live-akshare \
+  --out-dir Master/out-daily \
+  --fallback-example-output-on-fail
+```
+
+### 命令含义
+- `--source live-akshare`：用真实 A 股数据采集
+- `--out-dir Master/out-daily`：每天固定覆盖同一个最新输出目录
+- `--fallback-example-output-on-fail`：当前已改成**优先走本地规则 fallback**，不是优先走示例输出
+
+### 每日产物
+固定看这 4 个文件：
+- `Master/out-daily/decision.json`
+- `Master/out-daily/logic-warnings.json`
+- `Master/out-daily/daily-report.md`
+- `Master/out-daily/candidate-pool.md`
+
+### 用户只看什么
+当前阶段，用户只需要看 `daily-report.md` 里的 **当日复盘判断 5 句**：
+1. 今天环境判断
+2. 今天主线识别
+3. 今天最有效信号
+4. 今天最大风险
+5. 明天最该盯的点
+
+### 当前阶段不看什么
+- 不看个股候选池
+- 不看模拟买卖点
+- 不把 `candidate-pool.md` 当股票池使用
+
+### 连续观察目标
+连续跑 **3–5 个交易日**，重点观察：
+- 环境判断是否稳定
+- 主线识别是否漂移
+- 板块排序是否符合市场直觉
+- 本地 fallback 是否过于保守或过于激进
+
 ## 模式 1：收盘后主流程（推荐）
 这是当前最适合 Master 的方式。
 
@@ -140,9 +192,9 @@ LLM 输出后，先做两步检查：
 ### 产出
 - 当日市场环境判断
 - 当前主线 / 次主线 / 退潮方向
-- 候选池
-- 回避名单
-- 次日盘前策略摘要
+- 指数模式观察清单
+- 风险提示
+- 次日观察重点
 
 ---
 
