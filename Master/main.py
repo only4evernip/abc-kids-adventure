@@ -45,6 +45,70 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def append_jsonl(path: Path, rows: list[dict[str, Any]]) -> int:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing_keys = set()
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+                existing_keys.add((obj.get("trade_date"), obj.get("symbol"), obj.get("action")))
+            except Exception:
+                continue
+
+    appended = 0
+    with path.open("a", encoding="utf-8") as f:
+        for row in rows:
+            key = (row.get("trade_date"), row.get("symbol"), row.get("action"))
+            if key in existing_keys:
+                continue
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            existing_keys.add(key)
+            appended += 1
+    return appended
+
+
+def build_paper_trade_rows(result: Dict[str, Any], input_data: Dict[str, Any]) -> list[dict[str, Any]]:
+    trade_date = input_data.get("market_snapshot", {}).get("trade_date")
+    market = result.get("market_overview", {})
+    source_stocks = {s.get("symbol"): s for s in input_data.get("stock_snapshot", [])}
+    rows: list[dict[str, Any]] = []
+    tracked_actions = {"重点跟踪", "小仓试错", "回避", "可择机建仓"}
+
+    for stock in result.get("stock_analysis", []):
+        action = stock.get("action")
+        if action not in tracked_actions:
+            continue
+        src = source_stocks.get(stock.get("symbol"), {})
+        rows.append(
+            {
+                "trade_date": trade_date,
+                "symbol": stock.get("symbol"),
+                "name": stock.get("name"),
+                "main_theme": src.get("main_theme_name") or market.get("main_theme"),
+                "stock_role": stock.get("stock_role"),
+                "signal_type": stock.get("signal_type"),
+                "action": action,
+                "signal_score": stock.get("signal_score"),
+                "entry_price": src.get("close_price"),
+                "entry_reasoning": stock.get("action_reasoning") or stock.get("signal_reasoning"),
+                "risk_warning": stock.get("risk_warning"),
+                "invalid_condition": stock.get("invalid_condition"),
+                "market_environment_label": market.get("environment_label"),
+                "emotion_cycle": market.get("emotion_cycle"),
+                "t_plus_1_return": None,
+                "t_plus_3_return": None,
+                "t_plus_5_return": None,
+                "outcome_label": None,
+                "review_notes": "",
+            }
+        )
+    return rows
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Master minimal runner")
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="input JSON path")
@@ -54,6 +118,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--use-example-output", action="store_true", help="skip API call and use examples/output-example.json")
     parser.add_argument("--max-retries", type=int, default=2, help="max retries for model call / JSON extraction")
     parser.add_argument("--fallback-example-output-on-fail", action="store_true", help="fallback to examples/output-example.json if model path fails")
+    parser.add_argument("--paper-trades-path", type=Path, default=None, help="append tracked actions to paper trades jsonl")
     return parser.parse_args()
 
 
@@ -105,6 +170,11 @@ def main() -> int:
         print(f"[Master] wrote: {args.out_dir / 'logic-warnings.json'}")
         print(f"[Master] wrote: {args.out_dir / 'daily-report.md'}")
         print(f"[Master] wrote: {args.out_dir / 'candidate-pool.md'}")
+
+        if args.paper_trades_path:
+            rows = build_paper_trade_rows(result, input_data)
+            appended = append_jsonl(args.paper_trades_path, rows)
+            print(f"[Master] appended paper trades: {appended} -> {args.paper_trades_path}")
         if warnings:
             print(f"[Master] logic warnings: {len(warnings)}", file=sys.stderr)
             for w in warnings:
