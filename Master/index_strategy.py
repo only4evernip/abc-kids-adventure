@@ -22,6 +22,72 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def load_previous_result(path: Path) -> Dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def build_rebalance_plan(current_plan: Dict[str, Any], previous: Dict[str, Any] | None) -> Dict[str, Any]:
+    previous_plan = (previous or {}).get("allocation_plan", {}) or {}
+    if not previous_plan:
+        return {
+            "needs_rebalance": False,
+            "rebalance_action": "无昨日基线，今日先作为初始配置基准。",
+            "rebalance_reasoning": "当前缺少上一份指数策略配置结果，先记录今日配置，不做主动再平衡。",
+            "bucket_changes": [],
+        }
+
+    tracked = [
+        ("true_defensive_weight", "真防守"),
+        ("equity_defensive_weight", "权益防守"),
+        ("core_weight", "核心仓"),
+        ("satellite_weight", "卫星仓"),
+        ("a_share_weight", "A股"),
+        ("h_share_weight", "H股"),
+    ]
+    bucket_changes = []
+    for key, label in tracked:
+        cur = float(current_plan.get(key, 0) or 0)
+        prev = float(previous_plan.get(key, 0) or 0)
+        delta = round(cur - prev, 2)
+        if delta == 0:
+            continue
+        bucket_changes.append({
+            "bucket_name": label,
+            "change_direction": "增加" if delta > 0 else "减少",
+            "change_pct": abs(delta),
+            "reasoning": f"{label} 从 {prev}% 调整到 {cur}%，变化 {delta:+.2f}%。",
+        })
+
+    needs_rebalance = len(bucket_changes) > 0
+    if not needs_rebalance:
+        return {
+            "needs_rebalance": False,
+            "rebalance_action": "今日配置与昨日一致，无需主动调仓。",
+            "rebalance_reasoning": "环境档位与核心配置未发生变化，继续持有当前指数组合即可。",
+            "bucket_changes": [],
+        }
+
+    major_changes = [x for x in bucket_changes if x["change_pct"] >= 10]
+    if major_changes:
+        action = "环境已跨档，执行一级再平衡：先调卫星仓，再调核心仓，最后调整防守桶。"
+        reasoning = "今日与昨日相比已有明显跨档式变化，应按新权重做结构性再平衡。"
+    else:
+        action = "执行小幅再平衡，优先调整变化最大的配置桶。"
+        reasoning = "今日与昨日相比属于同档内微调，无需大幅换仓，但应按目标权重校正。"
+
+    return {
+        "needs_rebalance": True,
+        "rebalance_action": action,
+        "rebalance_reasoning": reasoning,
+        "bucket_changes": bucket_changes,
+    }
+
+
 def detect_environment(market: Dict[str, Any]) -> Dict[str, Any]:
     turnover = float(market.get("market_turnover_total") or 0)
     up_count = int(market.get("up_count") or 0)
@@ -92,7 +158,7 @@ WEIGHT_MAP: Dict[str, Dict[str, float]] = {
 }
 
 
-def build_index_strategy_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
+def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, Any] | None = None) -> Dict[str, Any]:
     market = input_data.get("market_snapshot", {}) or {}
     env = detect_environment(market)
     label = env["label"]
@@ -128,26 +194,17 @@ def build_index_strategy_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
         f"核心仓 {weights['core_weight']}%，卫星仓 {weights['satellite_weight']}%。"
     )
 
-    rebalance_action = {
-        "进攻": "提高权益暴露，但优先加核心仓，其次再考虑卫星仓。",
-        "试错": "维持中等权益暴露，以核心仓和权益防守为主，卫星仓小开。",
-        "混沌": "降低总权益，压缩卫星仓，更多依赖真防守和权益防守。",
-        "防守": "大幅收缩权益，优先回到真防守池，暂停卫星仓。",
-    }[label]
+    current_plan = {
+        **weights,
+        "allocation_summary": allocation_summary,
+    }
+    rebalance_plan = build_rebalance_plan(current_plan, previous)
 
     return {
         "environment_label": label,
         "environment_reasoning": env["reasoning"],
-        "allocation_plan": {
-            **weights,
-            "allocation_summary": allocation_summary,
-        },
-        "rebalance_plan": {
-            "needs_rebalance": False,
-            "rebalance_action": rebalance_action,
-            "rebalance_reasoning": "当前最小入口版本仅根据当日环境给出静态建议，后续再接入昨日对比生成真正的再平衡动作。",
-            "bucket_changes": [],
-        },
+        "allocation_plan": current_plan,
+        "rebalance_plan": rebalance_plan,
         "risk_flags": risk_flags,
         "watch_points": watch_points,
         "fund_pool_focus": fund_pool_focus,
@@ -217,7 +274,8 @@ def main() -> int:
                 CollectorConfig(source=args.source, use_example_fallback=args.fallback_example_output_on_fail)
             )
 
-        result = build_index_strategy_result(input_data)
+        previous = load_previous_result(args.out_dir / "index-strategy.json")
+        result = build_index_strategy_result(input_data, previous=previous)
         write_json(args.out_dir / "index-strategy.json", result)
         (args.out_dir / "index-strategy.md").write_text(render_index_strategy_report(result), encoding="utf-8")
 
