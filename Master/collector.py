@@ -160,7 +160,8 @@ class AkshareCollector(BaseCollector):
         rows: List[Dict[str, Any]] = []
 
         def convert(df, theme_type: str):
-            for _, row in df.iterrows():
+            for idx, row in enumerate(df.iterrows()):
+                _, row = row
                 rows.append(
                     {
                         "theme_name": row.get("板块名称"),
@@ -180,8 +181,8 @@ class AkshareCollector(BaseCollector):
                         "theme_follow_count": row.get("上涨家数"),
                         "theme_health_status": None,
                         "theme_stage_label": None,
-                        "theme_is_main": False,
-                        "theme_is_secondary": False,
+                        "theme_is_main": idx == 0,
+                        "theme_is_secondary": idx == 1,
                         "theme_retreat_flag": False,
                         "theme_consensus_score": None,
                     }
@@ -195,6 +196,31 @@ class AkshareCollector(BaseCollector):
         symbols = self._load_watchlist(config)
         if not symbols:
             return []
+
+        theme_rows = self.collect_theme_snapshot(config)
+        concept_themes = [x for x in theme_rows if x.get("theme_type") == "概念板块"]
+        industry_themes = [x for x in theme_rows if x.get("theme_type") == "行业板块"]
+
+        symbol_theme_map: Dict[str, List[str]] = {}
+
+        def attach_theme(symbol: str, theme_name: str):
+            symbol_theme_map.setdefault(symbol, []).append(theme_name)
+
+        for theme in concept_themes[:3]:
+            try:
+                df = self.ak.stock_board_concept_cons_em(symbol=theme.get("theme_name"))
+                for _, row in df[["代码", "名称"]].head(50).iterrows():
+                    attach_theme(str(row.get("代码")), str(theme.get("theme_name")))
+            except Exception:
+                continue
+
+        for theme in industry_themes[:3]:
+            try:
+                df = self.ak.stock_board_industry_cons_em(symbol=theme.get("theme_name"))
+                for _, row in df[["代码", "名称"]].head(50).iterrows():
+                    attach_theme(str(row.get("代码")), str(theme.get("theme_name")))
+            except Exception:
+                continue
 
         rows: List[Dict[str, Any]] = []
         for symbol in symbols:
@@ -216,6 +242,9 @@ class AkshareCollector(BaseCollector):
                 if info_df is not None and len(info_df) > 0:
                     for _, info_row in info_df.iterrows():
                         info_map[str(info_row.get("item"))] = info_row.get("value")
+
+                matched_themes = symbol_theme_map.get(symbol, [])
+                main_theme_name = matched_themes[0] if matched_themes else None
 
                 rows.append(
                     {
@@ -244,8 +273,8 @@ class AkshareCollector(BaseCollector):
                         "blowup_flag": None,
                         "sealed_order_strength": None,
                         "industry": info_map.get("行业"),
-                        "concept_tags": [],
-                        "main_theme_name": None,
+                        "concept_tags": matched_themes,
+                        "main_theme_name": main_theme_name,
                     }
                 )
             except Exception:
