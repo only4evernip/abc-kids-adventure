@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Master A-Share Trading Agent Schema",
+  "type": "object",
+  "properties": {
+    "market_overview": {
+      "type": "object",
+      "properties": {
+        "environment_label": {
+          "type": "string",
+          "enum": ["进攻", "试错", "混沌", "防守"]
+        },
+        "emotion_cycle": {
+          "type": "string",
+          "enum": ["冰点", "修复", "主升", "高潮", "强分歧", "退潮", "混沌"]
+        },
+        "market_score": { "type": "number" },
+        "turnover_total": { "type": "number" },
+        "up_count": { "type": "number" },
+        "down_count": { "type": "number" },
+        "limit_up_count": { "type": "number" },
+        "limit_down_count": { "type": "number" },
+        "blowup_rate": { "type": "number" },
+        "highest_board": { "type": "number" },
+        "northbound_net_inflow": { "type": "number" },
+        "main_theme": { "type": "string" },
+        "secondary_theme": { "type": "string" },
+        "retreat_theme": { "type": "string" },
+        "recommended_style": { "type": "string" },
+        "forbidden_style": { "type": "string" },
+        "allow_level_2": { "type": "boolean" }
+      },
+      "required": [
+        "environment_label",
+        "emotion_cycle",
+        "market_score",
+        "turnover_total",
+        "limit_up_count",
+        "limit_down_count",
+        "recommended_style",
+        "forbidden_style",
+        "allow_level_2"
+      ]
+    },
+    "sector_analysis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sector_name": { "type": "string" },
+          "sector_stage": {
+            "type": "string",
+            "enum": ["启动", "发酵", "主升", "强分歧", "高位震荡", "退潮", "退潮反抽", "一日游"]
+          },
+          "sector_score": { "type": "number" },
+          "leader_stock": { "type": "string" },
+          "core_midcap_stock": { "type": "string" },
+          "follow_strength": { "type": "string" },
+          "health_status": {
+            "type": "string",
+            "enum": ["健康", "一般", "分歧", "危险"]
+          },
+          "is_main_theme": { "type": "boolean" },
+          "allow_level_3": { "type": "boolean" },
+          "action": {
+            "type": "string",
+            "enum": ["回避", "观察", "小仓试错", "重点跟踪", "可择机参与", "减仓", "退出"]
+          }
+        },
+        "required": [
+          "sector_name",
+          "sector_stage",
+          "sector_score",
+          "health_status",
+          "is_main_theme",
+          "allow_level_3",
+          "action"
+        ]
+      }
+    },
+    "stock_analysis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "symbol": { "type": "string" },
+          "name": { "type": "string" },
+          "stock_role": {
+            "type": "string",
+            "enum": ["总龙头", "板块龙头", "情绪龙头", "趋势中军", "核心补涨", "跟风", "杂毛", "反抽股"]
+          },
+          "matched_market": { "type": "boolean" },
+          "matched_theme": { "type": "boolean" },
+          "signal_type": {
+            "type": "string",
+            "enum": ["分歧低吸", "回踩确认", "突破确认", "打板确认", "观察", "高位风险", "破位卖点", "退出信号"]
+          },
+          "signal_score": { "type": "number" },
+          "action": {
+            "type": "string",
+            "enum": ["回避", "观察", "小仓试错", "重点跟踪", "可择机建仓", "可趋势持有", "减仓", "退出"]
+          },
+          "risk_warning": { "type": "string" },
+          "invalid_condition": { "type": "string" }
+        },
+        "required": [
+          "symbol",
+          "name",
+          "stock_role",
+          "matched_market",
+          "matched_theme",
+          "signal_type",
+          "signal_score",
+          "action"
+        ]
+      }
+    }
+  },
+  "required": ["market_overview", "sector_analysis", "stock_analysis"]
+}
