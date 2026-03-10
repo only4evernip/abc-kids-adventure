@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -82,6 +83,18 @@ class AkshareCollector(BaseCollector):
             raise CollectorError("akshare is not installed; cannot use live-akshare source")
         import akshare as ak  # type: ignore
         self.ak = ak
+        self.ts = None
+        self.ts_pro = None
+        self.ts_token = os.getenv("TUSHARE_TOKEN") or os.getenv("TUSHARE_API_TOKEN")
+        if self.ts_token and importlib.util.find_spec("tushare"):
+            try:
+                import tushare as ts  # type: ignore
+                ts.set_token(self.ts_token)
+                self.ts = ts
+                self.ts_pro = ts.pro_api(self.ts_token)
+            except Exception:
+                self.ts = None
+                self.ts_pro = None
 
     def _load_watchlist(self, config: CollectorConfig) -> List[str]:
         path = Path(config.watchlist_path) if config.watchlist_path else DEFAULT_WATCHLIST
@@ -124,6 +137,69 @@ class AkshareCollector(BaseCollector):
             return int(len(df)) if df is not None else None
         except Exception:
             return None
+
+    def _to_float(self, value: Any) -> Optional[float]:
+        try:
+            if value is None or value == "":
+                return None
+            return float(value)
+        except Exception:
+            return None
+
+    def _get_tushare_market_extras(self, trade_date: Optional[str]) -> Dict[str, Any]:
+        if not self.ts_pro:
+            return {}
+
+        if not trade_date:
+            return {}
+        trade_date_ymd = str(trade_date).replace("-", "")
+
+        result: Dict[str, Any] = {}
+        try:
+            idx_df = self.ts_pro.index_daily(ts_code="399300.SZ", trade_date=trade_date_ymd)
+            if idx_df is not None and len(idx_df) > 0:
+                result["hs300_close"] = self._to_float(idx_df.iloc[0].get("close"))
+        except Exception:
+            pass
+
+        try:
+            idx_df = self.ts_pro.index_daily(ts_code="000905.SH", trade_date=trade_date_ymd)
+            if idx_df is not None and len(idx_df) > 0:
+                result["zz500_close"] = self._to_float(idx_df.iloc[0].get("close"))
+        except Exception:
+            pass
+
+        try:
+            idx_df = self.ts_pro.index_daily(ts_code="000852.SH", trade_date=trade_date_ymd)
+            if idx_df is not None and len(idx_df) > 0:
+                result["zz1000_close"] = self._to_float(idx_df.iloc[0].get("close"))
+        except Exception:
+            pass
+
+        try:
+            idx_df = self.ts_pro.index_daily(ts_code="000688.SH", trade_date=trade_date_ymd)
+            if idx_df is not None and len(idx_df) > 0:
+                result["kc50_close"] = self._to_float(idx_df.iloc[0].get("close"))
+        except Exception:
+            pass
+
+        try:
+            money_df = self.ts_pro.moneyflow_mkt_dc(trade_date=trade_date_ymd)
+            if money_df is not None and len(money_df) > 0:
+                row = money_df.iloc[0]
+                result["northbound_net_inflow"] = self._to_float(row.get("buy_elg_amount"))
+        except Exception:
+            pass
+
+        try:
+            adv_df = self.ts_pro.daily_basic(trade_date=trade_date_ymd, fields="ts_code,trade_date,total_mv")
+            if adv_df is not None and len(adv_df) > 0:
+                result["up_count"] = None
+                result["down_count"] = None
+        except Exception:
+            pass
+
+        return result
 
     def collect_market_snapshot(self, config: CollectorConfig) -> Dict[str, Any]:
         try:
@@ -168,7 +244,7 @@ class AkshareCollector(BaseCollector):
         if zt_count is not None and zb_count is not None and (zt_count + zb_count) > 0:
             blowup_rate = zb_count / (zt_count + zb_count)
 
-        return {
+        result = {
             "trade_date": trade_date,
             "sh_index_close": self._last_close(idx_sh),
             "sz_index_close": self._last_close(idx_sz),
@@ -190,6 +266,8 @@ class AkshareCollector(BaseCollector):
             "high_level_stock_drawdown_flag": None,
             "northbound_net_inflow": None,
         }
+        result.update({k: v for k, v in self._get_tushare_market_extras(trade_date).items() if v is not None})
+        return result
 
     def collect_theme_snapshot(self, config: CollectorConfig) -> List[Dict[str, Any]]:
         try:
