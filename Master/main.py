@@ -12,6 +12,7 @@ from builder import load_and_build, validate_input_shape
 from collector import CollectorConfig, collect_input
 from judge import build_messages, call_openai_compatible, extract_json
 from renderer import render_candidate_pool, render_report
+from review_stub import build_paper_review_stub, write_paper_review_stub
 from validator import validate_result
 
 
@@ -119,6 +120,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-retries", type=int, default=2, help="max retries for model call / JSON extraction")
     parser.add_argument("--fallback-example-output-on-fail", action="store_true", help="fallback to examples/output-example.json if model path fails")
     parser.add_argument("--paper-trades-path", type=Path, default=None, help="append tracked actions to paper trades jsonl")
+    parser.add_argument("--paper-review-stub-path", type=Path, default=None, help="write a paper review stub markdown")
     return parser.parse_args()
 
 
@@ -171,10 +173,18 @@ def main() -> int:
         print(f"[Master] wrote: {args.out_dir / 'daily-report.md'}")
         print(f"[Master] wrote: {args.out_dir / 'candidate-pool.md'}")
 
+        paper_rows = []
         if args.paper_trades_path:
-            rows = build_paper_trade_rows(result, input_data)
-            appended = append_jsonl(args.paper_trades_path, rows)
+            paper_rows = build_paper_trade_rows(result, input_data)
+            appended = append_jsonl(args.paper_trades_path, paper_rows)
             print(f"[Master] appended paper trades: {appended} -> {args.paper_trades_path}")
+
+        if args.paper_review_stub_path:
+            trade_date = input_data.get("market_snapshot", {}).get("trade_date")
+            stub = build_paper_review_stub(result, paper_rows=paper_rows, trade_date=trade_date)
+            write_paper_review_stub(args.paper_review_stub_path, stub)
+            print(f"[Master] wrote: {args.paper_review_stub_path}")
+
         if warnings:
             print(f"[Master] logic warnings: {len(warnings)}", file=sys.stderr)
             for w in warnings:
