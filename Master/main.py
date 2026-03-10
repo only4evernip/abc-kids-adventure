@@ -243,43 +243,43 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
         risk_flags.append("当前无极端风险，但仍应只围绕强板块行动")
 
     if environment_label == "进攻":
-        total_equity_target = 90
-        true_defensive_weight = 10
+        total_equity_target = 85
+        true_defensive_weight = 15
         equity_defensive_weight = 20
-        core_weight = 50
-        satellite_weight = 20
-        rebalance_action = "提高权益仓位，核心仓优先，卫星仓小步跟进"
-    elif environment_label == "试错":
-        total_equity_target = 60
-        true_defensive_weight = 40
-        equity_defensive_weight = 20
-        core_weight = 30
+        core_weight = 40
         satellite_weight = 10
-        rebalance_action = "维持中等权益仓位，先配核心和权益防守，卫星仓低配"
-    elif environment_label == "防守":
-        total_equity_target = 20
-        true_defensive_weight = 80
-        equity_defensive_weight = 10
-        core_weight = 10
-        satellite_weight = 0
-        rebalance_action = "大幅降仓，减出资金优先转入真防守池"
-    else:
-        total_equity_target = 40
-        true_defensive_weight = 60
-        equity_defensive_weight = 15
-        core_weight = 20
+        rebalance_action = "提高权益仓位，但仍以核心仓和权益防守为主，卫星仓只小步跟进"
+    elif environment_label == "试错":
+        total_equity_target = 55
+        true_defensive_weight = 45
+        equity_defensive_weight = 25
+        core_weight = 25
         satellite_weight = 5
-        rebalance_action = "低仓运行，以观察和等待为主"
+        rebalance_action = "维持中低权益仓位，先配债券真防守和红利低波，卫星仓尽量压低"
+    elif environment_label == "防守":
+        total_equity_target = 15
+        true_defensive_weight = 85
+        equity_defensive_weight = 10
+        core_weight = 5
+        satellite_weight = 0
+        rebalance_action = "大幅降仓，减出资金优先转入债券/货基真防守池"
+    else:
+        total_equity_target = 35
+        true_defensive_weight = 65
+        equity_defensive_weight = 20
+        core_weight = 15
+        satellite_weight = 0
+        rebalance_action = "低仓等待，以真防守和权益防守为主，不主动打开卫星仓"
 
-    if secondary_theme in {"恒生科技", "互联网", "港股互联网", "中概互联"}:
-        a_share_weight = 45
-        h_share_weight = 55
+    if secondary_theme in {"恒生科技", "互联网", "港股互联网", "中概互联"} and environment_label == "进攻":
+        a_share_weight = 55
+        h_share_weight = 45
     elif main_theme in {"高股息", "红利", "央企价值"}:
         a_share_weight = 70
         h_share_weight = 30
     else:
-        a_share_weight = 60
-        h_share_weight = 40
+        a_share_weight = 65
+        h_share_weight = 35
 
     fund_pool_focus = [
         "A股核心池：沪深300ETF / 中证A500ETF",
@@ -304,28 +304,28 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
             "bucket_name": "真防守池",
             "bucket_weight": true_defensive_weight,
             "bucket_type": "defensive",
-            "funds": ["货币基金", "短债基金", "同业存单指数基金"],
+            "funds": ["政策性金融债指数基金", "短债基金", "货币基金"],
         })
     if a_def_weight > 0:
         execution_buckets.append({
             "bucket_name": "A股权益防守池",
             "bucket_weight": a_def_weight,
             "bucket_type": "equity_defensive",
-            "funds": ["中证红利ETF", "红利低波ETF", "央企价值ETF"],
+            "funds": ["红利低波ETF", "价值ETF", "中证红利ETF"],
         })
     if h_def_weight > 0:
         execution_buckets.append({
             "bucket_name": "H股权益防守池",
             "bucket_weight": h_def_weight,
             "bucket_type": "equity_defensive",
-            "funds": ["港股高股息ETF", "恒生红利ETF"],
+            "funds": ["港股高股息低波ETF", "港股高股息ETF"],
         })
     if a_core_weight > 0:
         execution_buckets.append({
             "bucket_name": "A股核心池",
             "bucket_weight": a_core_weight,
             "bucket_type": "core",
-            "funds": ["沪深300ETF", "中证A500ETF"],
+            "funds": ["沪深300ETF", "中证A500ETF", "价值宽基ETF"],
         })
     if h_core_weight > 0:
         execution_buckets.append({
@@ -339,7 +339,7 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
             "bucket_name": "A股卫星池",
             "bucket_weight": a_sat_weight,
             "bucket_type": "satellite",
-            "funds": ["中证1000指增", "中证500指增"],
+            "funds": ["中证1000指增", "中证500指增", "高景气行业主动基金"],
         })
     if h_sat_weight > 0:
         execution_buckets.append({
@@ -363,8 +363,10 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
         "fund_pool_focus": fund_pool_focus,
         "risk_controls": [
             "若核心宽基跌破120日线，核心仓和卫星仓继续下调",
+            "真防守优先用政策性金融债和短债，不把高股息误当现金",
             "卫星仓默认低配，只有趋势与波动同时配合时再提高",
-            "组合新增仓位优先投向核心ETF，不优先投高弹性资产",
+            "H股核心和H股卫星都更克制，除非趋势确认，否则不轻易抬权重",
+            "组合新增仓位优先投向核心ETF和红利低波，不优先投高弹性资产",
         ],
         "execution_buckets": execution_buckets,
     }
