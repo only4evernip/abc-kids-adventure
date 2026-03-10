@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 ROOT = Path(__file__).resolve().parent
 EXAMPLE_INPUT = ROOT / "examples" / "input-example.json"
+DEFAULT_WATCHLIST = ROOT / "watchlist.txt"
 
 
 class CollectorError(Exception):
@@ -20,6 +21,7 @@ class CollectorConfig:
     trade_date: Optional[str] = None
     source: str = "example"
     use_example_fallback: bool = True
+    watchlist_path: Optional[str] = None
 
 
 class BaseCollector:
@@ -80,9 +82,38 @@ class AkshareCollector(BaseCollector):
         import akshare as ak  # type: ignore
         self.ak = ak
 
+    def _load_watchlist(self, config: CollectorConfig) -> List[str]:
+        path = Path(config.watchlist_path) if config.watchlist_path else DEFAULT_WATCHLIST
+        if not path.exists():
+            return []
+
+        if path.suffix.lower() == ".json":
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return [str(x).strip() for x in data if str(x).strip()]
+            raise CollectorError("watchlist json must be an array of stock codes")
+
+        items: List[str] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            items.append(line)
+        return items
+
+    def _last_row(self, df):
+        if df is None or len(df) == 0:
+            return None
+        return df.iloc[-1]
+
+    def _last_close(self, df):
+        row = self._last_row(df)
+        if row is None:
+            return None
+        value = row.get("close")
+        return float(value) if value is not None else None
+
     def collect_market_snapshot(self, config: CollectorConfig) -> Dict[str, Any]:
-        # 先给出最小真实入口定义。这里优先使用 AkShare 常见接口，
-        # 若后续字段不足，再继续扩展，不在当前阶段硬凑伪数据。
         try:
             idx_sh = self.ak.stock_zh_index_daily(symbol="sh000001")
             idx_sz = self.ak.stock_zh_index_daily(symbol="sz399001")
@@ -90,19 +121,17 @@ class AkshareCollector(BaseCollector):
         except Exception as exc:
             raise CollectorError(f"akshare index fetch failed: {exc}")
 
-        def last_close(df):
-            if df is None or len(df) == 0:
-                return None
-            row = df.iloc[-1]
-            return float(row.get("close")) if row.get("close") is not None else None
+        last_row = self._last_row(idx_sh)
+        trade_date = config.trade_date
+        if trade_date is None and last_row is not None:
+            date_val = last_row.get("date")
+            trade_date = str(date_val) if date_val is not None else None
 
-        # 这里只返回能稳定拿到的基础指数字段；
-        # 涨跌停、炸板、连板高度等情绪字段后续再接入专门数据源。
         return {
-            "trade_date": config.trade_date,
-            "sh_index_close": last_close(idx_sh),
-            "sz_index_close": last_close(idx_sz),
-            "cyb_index_close": last_close(idx_cyb),
+            "trade_date": trade_date,
+            "sh_index_close": self._last_close(idx_sh),
+            "sz_index_close": self._last_close(idx_sz),
+            "cyb_index_close": self._last_close(idx_cyb),
             "hs300_close": None,
             "zz500_close": None,
             "zz1000_close": None,
@@ -122,10 +151,100 @@ class AkshareCollector(BaseCollector):
         }
 
     def collect_theme_snapshot(self, config: CollectorConfig) -> List[Dict[str, Any]]:
-        raise CollectorError("live-akshare theme collection is not implemented yet; need board/theme data source")
+        try:
+            concept_df = self.ak.stock_board_concept_name_em().head(5)
+            industry_df = self.ak.stock_board_industry_name_em().head(5)
+        except Exception as exc:
+            raise CollectorError(f"akshare theme fetch failed: {exc}")
+
+        rows: List[Dict[str, Any]] = []
+
+        def convert(df, theme_type: str):
+            for _, row in df.iterrows():
+                rows.append(
+                    {
+                        "theme_name": row.get("板块名称"),
+                        "theme_type": theme_type,
+                        "theme_change_pct": row.get("涨跌幅"),
+                        "theme_turnover": None,
+                        "theme_turnover_change": None,
+                        "theme_turnover_ratio": None,
+                        "theme_money_flow_ratio": None,
+                        "theme_limit_up_count": None,
+                        "theme_blowup_count": None,
+                        "theme_highest_board": None,
+                        "theme_leader_stock": row.get("领涨股票"),
+                        "theme_leader_board_count": None,
+                        "theme_midcap_core_stock": None,
+                        "theme_core_stock_count": None,
+                        "theme_follow_count": row.get("上涨家数"),
+                        "theme_health_status": None,
+                        "theme_stage_label": None,
+                        "theme_is_main": False,
+                        "theme_is_secondary": False,
+                        "theme_retreat_flag": False,
+                        "theme_consensus_score": None,
+                    }
+                )
+
+        convert(concept_df, "概念板块")
+        convert(industry_df, "行业板块")
+        return rows
 
     def collect_stock_snapshot(self, config: CollectorConfig) -> List[Dict[str, Any]]:
-        raise CollectorError("live-akshare stock collection is not implemented yet; need candidate universe / watchlist")
+        symbols = self._load_watchlist(config)
+        if not symbols:
+            return []
+
+        rows: List[Dict[str, Any]] = []
+        for symbol in symbols:
+            try:
+                df = self.ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="")
+                if df is None or len(df) == 0:
+                    continue
+                tail = df.tail(60).reset_index(drop=True)
+                row = tail.iloc[-1]
+
+                closes = tail["收盘"].tolist()
+                ma5 = sum(closes[-5:]) / min(len(closes), 5) if closes else None
+                ma10 = sum(closes[-10:]) / min(len(closes), 10) if closes else None
+                ma20 = sum(closes[-20:]) / min(len(closes), 20) if closes else None
+                ma60 = sum(closes[-60:]) / min(len(closes), 60) if closes else None
+
+                rows.append(
+                    {
+                        "symbol": str(row.get("股票代码")),
+                        "name": None,
+                        "close_price": row.get("收盘"),
+                        "open_price": row.get("开盘"),
+                        "high_price": row.get("最高"),
+                        "low_price": row.get("最低"),
+                        "pct_change": row.get("涨跌幅"),
+                        "turnover_amount": row.get("成交额"),
+                        "turnover_rate": row.get("换手率"),
+                        "volume_ratio": None,
+                        "circulating_market_cap": None,
+                        "total_market_cap": None,
+                        "board_count": None,
+                        "days_since_last_limit_up": None,
+                        "is_recent_high_stock": None,
+                        "is_previous_cycle_core": None,
+                        "ma5": ma5,
+                        "ma10": ma10,
+                        "ma20": ma20,
+                        "ma60": ma60,
+                        "limit_up_flag": None,
+                        "limit_down_flag": None,
+                        "blowup_flag": None,
+                        "sealed_order_strength": None,
+                        "industry": None,
+                        "concept_tags": [],
+                        "main_theme_name": None,
+                    }
+                )
+            except Exception:
+                continue
+        return rows
 
 
 def get_collector(source: str) -> BaseCollector:

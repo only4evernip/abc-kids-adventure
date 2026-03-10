@@ -116,6 +116,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT, help="output directory")
     parser.add_argument("--model", default=os.getenv("MASTER_MODEL", "gpt-4o-mini"), help="LLM model")
     parser.add_argument("--source", default="file", choices=["file", "example", "live", "live-akshare"], help="input source mode")
+    parser.add_argument("--watchlist", type=Path, default=None, help="watchlist file path for live collectors")
     parser.add_argument("--use-example-output", action="store_true", help="skip API call and use examples/output-example.json")
     parser.add_argument("--max-retries", type=int, default=2, help="max retries for model call / JSON extraction")
     parser.add_argument("--fallback-example-output-on-fail", action="store_true", help="fallback to examples/output-example.json if model path fails")
@@ -136,6 +137,7 @@ def main() -> int:
                 CollectorConfig(
                     source=args.source,
                     use_example_fallback=args.fallback_example_output_on_fail,
+                    watchlist_path=str(args.watchlist) if args.watchlist else None,
                 )
             )
             input_data = collected
