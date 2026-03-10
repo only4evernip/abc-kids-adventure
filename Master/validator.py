@@ -7,13 +7,65 @@ class ValidationError(Exception):
     pass
 
 
-def validate_required_keys(result: Dict[str, Any], schema: Dict[str, Any]) -> List[str]:
+TYPE_MAP = {
+    "object": dict,
+    "array": list,
+    "string": str,
+    "number": (int, float),
+    "boolean": bool,
+}
+
+
+def _format_path(path: str, key: str) -> str:
+    if not path:
+        return key
+    if key.startswith("["):
+        return f"{path}{key}"
+    return f"{path}.{key}"
+
+
+def _validate_schema_node(value: Any, schema: Dict[str, Any], path: str = "") -> List[str]:
     warnings: List[str] = []
-    top_required = schema.get("required", [])
-    for key in top_required:
-        if key not in result:
-            warnings.append(f"missing top-level key: {key}")
+
+    expected_type = schema.get("type")
+    if expected_type in TYPE_MAP and not isinstance(value, TYPE_MAP[expected_type]):
+        warnings.append(f"schema type mismatch at {path or '<root>'}: expected {expected_type}")
+        return warnings
+
+    enum_values = schema.get("enum")
+    if enum_values is not None and value not in enum_values:
+        warnings.append(f"schema enum mismatch at {path or '<root>'}: got {value!r}")
+
+    if expected_type == "object":
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+
+        if not isinstance(value, dict):
+            warnings.append(f"schema object mismatch at {path or '<root>'}")
+            return warnings
+
+        for key in required:
+            if key not in value:
+                warnings.append(f"missing required key at {path or '<root>'}: {key}")
+
+        for key, child_schema in properties.items():
+            if key in value:
+                warnings.extend(_validate_schema_node(value[key], child_schema, _format_path(path, key)))
+
+    elif expected_type == "array":
+        if not isinstance(value, list):
+            warnings.append(f"schema array mismatch at {path or '<root>'}")
+            return warnings
+        item_schema = schema.get("items")
+        if item_schema:
+            for idx, item in enumerate(value):
+                warnings.extend(_validate_schema_node(item, item_schema, _format_path(path, f"[{idx}]")))
+
     return warnings
+
+
+def validate_against_schema(result: Dict[str, Any], schema: Dict[str, Any]) -> List[str]:
+    return _validate_schema_node(result, schema, "")
 
 
 def validate_market_overview(result: Dict[str, Any]) -> List[str]:
@@ -70,7 +122,7 @@ def validate_sector_and_stock_logic(result: Dict[str, Any]) -> List[str]:
 
 def validate_result(result: Dict[str, Any], schema: Dict[str, Any]) -> List[str]:
     warnings: List[str] = []
-    warnings.extend(validate_required_keys(result, schema))
+    warnings.extend(validate_against_schema(result, schema))
     warnings.extend(validate_market_overview(result))
     warnings.extend(validate_sector_and_stock_logic(result))
     return warnings
