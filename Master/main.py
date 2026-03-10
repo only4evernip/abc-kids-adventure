@@ -115,7 +115,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="input JSON path")
     parser.add_argument("--out-dir", type=Path, default=DEFAULT_OUT, help="output directory")
     parser.add_argument("--model", default=os.getenv("MASTER_MODEL", "gpt-4o-mini"), help="LLM model")
-    parser.add_argument("--source", default="file", choices=["file", "example", "live"], help="input source mode")
+    parser.add_argument("--source", default="file", choices=["file", "example", "live", "live-akshare"], help="input source mode")
     parser.add_argument("--use-example-output", action="store_true", help="skip API call and use examples/output-example.json")
     parser.add_argument("--max-retries", type=int, default=2, help="max retries for model call / JSON extraction")
     parser.add_argument("--fallback-example-output-on-fail", action="store_true", help="fallback to examples/output-example.json if model path fails")
@@ -132,7 +132,12 @@ def main() -> int:
         if args.source == "file":
             input_data = load_and_build(args.input)
         else:
-            collected = collect_input(CollectorConfig(source=args.source))
+            collected = collect_input(
+                CollectorConfig(
+                    source=args.source,
+                    use_example_fallback=args.fallback_example_output_on_fail,
+                )
+            )
             input_data = collected
         input_warnings = validate_input_shape(input_data)
         context = load_master_context()
