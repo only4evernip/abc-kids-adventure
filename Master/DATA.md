@@ -60,11 +60,15 @@ Master 的核心不是囤积数据，而是把数据服务于三层联动：
 - `theme_change_pct`
 - `theme_turnover`
 - `theme_turnover_change`
+- `theme_turnover_ratio`（板块成交额占两市成交额比例）
+- `theme_money_flow_ratio`（板块净流入 / 成交额，用于辅助判断拥挤与承接）
 - `theme_limit_up_count`
 - `theme_blowup_count`
 - `theme_highest_board`
 - `theme_leader_stock`
+- `theme_leader_board_count`
 - `theme_midcap_core_stock`
+- `theme_core_stock_count`
 - `theme_follow_count`
 - `theme_health_status`
 - `theme_stage_label`（启动 / 发酵 / 主升 / 强分歧 / 高位震荡 / 退潮 / 退潮反抽 / 一日游）
@@ -94,6 +98,12 @@ Master 的核心不是囤积数据，而是把数据服务于三层联动：
 - `turnover_amount`
 - `turnover_rate`
 - `volume_ratio`
+- `circulating_market_cap`
+- `total_market_cap`
+- `board_count`（当前连板数）
+- `days_since_last_limit_up`
+- `is_recent_high_stock`
+- `is_previous_cycle_core`
 - `ma5`
 - `ma10`
 - `ma20`
@@ -181,6 +191,9 @@ A 股很多最值钱的信息，不是纯行情字段，而是半结构化判断
 - 昨日涨停溢价率
 - 封单强度
 - 板块跟风数量
+- 流通市值 / 总市值
+- 连板数 / 距离上次涨停天数
+- 板块成交额占比
 - 退潮反抽标签
 - 假突破标签
 
@@ -256,6 +269,14 @@ A 股很多最值钱的信息，不是纯行情字段，而是半结构化判断
 - 规则引擎自动生成
 - LLM 根据当日结构总结生成
 - 人工校正
+
+### 重要约束
+半结构化标签不能只靠语感生成，必须尽可能绑定触发条件。
+
+例如：
+- `is_retreat_rebound = true`：前主线已进入退潮，且当日反弹未伴随中军强化、梯队重建、成交额放大
+- `is_fake_breakout = true`：价格突破前高，但成交量/封板质量/板块跟随不足
+- `is_high_risk_follow = true`：龙头已明显分歧或断板，而后排跟风股才出现脉冲涨停
 
 ### 典型标签
 - 当前是主升还是退潮
