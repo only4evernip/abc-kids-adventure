@@ -46,6 +46,160 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
+    market = input_data.get("market_snapshot", {})
+    sectors = input_data.get("theme_snapshot", [])
+
+    limit_up = market.get("limit_up_count") or 0
+    limit_down = market.get("limit_down_count") or 0
+    blowup_rate = market.get("blowup_rate") or 0
+    highest_board = market.get("highest_board") or 0
+
+    if limit_up >= 60 and blowup_rate <= 0.2 and limit_down <= 3:
+        environment_label = "进攻"
+        emotion_cycle = "主升"
+        market_score = 78
+        recommended_style = "主线可积极跟随，但仍优先做核心板块"
+        forbidden_style = "禁止脱离主线乱追边缘题材"
+    elif limit_up >= 30 and blowup_rate <= 0.4 and limit_down <= 10:
+        environment_label = "试错"
+        emotion_cycle = "修复"
+        market_score = 60
+        recommended_style = "聚焦最强板块，先做确认，少做扩散"
+        forbidden_style = "禁止追高后排、禁止把反抽当反转"
+    elif limit_down >= 15 or blowup_rate >= 0.5:
+        environment_label = "防守"
+        emotion_cycle = "退潮"
+        market_score = 28
+        recommended_style = "控制节奏，以观察和回避为主"
+        forbidden_style = "禁止激进试错、禁止硬接退潮反抽"
+    else:
+        environment_label = "混沌"
+        emotion_cycle = "混沌"
+        market_score = 45
+        recommended_style = "只盯强辨识度方向，避免频繁出手"
+        forbidden_style = "禁止预判全面主升、禁止见涨就追"
+
+    ranked_sectors = sorted(
+        sectors,
+        key=lambda x: (
+            x.get("theme_limit_up_count") or 0,
+            -(x.get("theme_blowup_count") or 0),
+            x.get("theme_highest_board") or 0,
+            x.get("theme_change_pct") or 0,
+        ),
+        reverse=True,
+    )
+
+    def sector_stage(row: Dict[str, Any]) -> str:
+        zt = row.get("theme_limit_up_count") or 0
+        zb = row.get("theme_blowup_count") or 0
+        hb = row.get("theme_highest_board") or 0
+        chg = row.get("theme_change_pct") or 0
+        if hb >= 4 and zt >= 2 and zb <= 1:
+            return "主升"
+        if zt >= 2 and chg >= 2:
+            return "发酵"
+        if zb >= max(2, zt) or chg < 0:
+            return "退潮反抽"
+        return "观察"
+
+    def sector_health(row: Dict[str, Any]) -> str:
+        zt = row.get("theme_limit_up_count") or 0
+        zb = row.get("theme_blowup_count") or 0
+        if zt >= 3 and zb == 0:
+            return "健康"
+        if zt >= 1 and zb <= 1:
+            return "一般"
+        if zb >= 2:
+            return "危险"
+        return "分歧"
+
+    sector_analysis = []
+    for idx, row in enumerate(ranked_sectors[:5]):
+        stage = sector_stage(row)
+        health = sector_health(row)
+        score = min(95, 40 + (row.get("theme_limit_up_count") or 0) * 8 + (row.get("theme_highest_board") or 0) * 5 - (row.get("theme_blowup_count") or 0) * 6)
+        is_main = idx == 0 and score >= 55
+        if stage in {"退潮反抽"} or health == "危险":
+            action = "回避"
+        elif is_main:
+            action = "重点跟踪"
+        elif score >= 55:
+            action = "小仓试错"
+        else:
+            action = "观察"
+
+        sector_analysis.append(
+            {
+                "sector_name": row.get("theme_name") or f"板块{idx+1}",
+                "sector_reasoning": f"先看结论：该方向当前{action}。理由是涨停 {row.get('theme_limit_up_count') or 0} 家、炸板 {row.get('theme_blowup_count') or 0} 家、最高板 {row.get('theme_highest_board') or 0}。",
+                "sector_stage_reasoning": f"先看阶段：当前更像{stage}。理由是板块强度、连板高度和炸板情况共同决定。",
+                "sector_stage": stage if stage in {"启动", "发酵", "主升", "强分歧", "高位震荡", "退潮", "退潮反抽", "一日游"} else "发酵",
+                "sector_score_reasoning": f"先看分数：综合涨停密度、炸板压力、连板高度后，板块分数为 {score}。",
+                "sector_score": score,
+                "leader_stock": row.get("theme_leader_stock") or "",
+                "core_midcap_stock": "",
+                "follow_strength": "较强" if (row.get("theme_limit_up_count") or 0) >= 3 else "一般",
+                "health_reasoning": f"先看健康度：当前为{health}。核心依据是涨停密度与炸板压力的对比。",
+                "health_status": health if health in {"健康", "一般", "分歧", "危险"} else "一般",
+                "is_main_theme_reasoning": f"先看主线资格：{'具备' if is_main else '暂不具备'}当前主线特征。",
+                "is_main_theme": is_main,
+                "allow_level_3_reasoning": "当前运行在指数模式，不下钻个股层。",
+                "allow_level_3": False,
+                "anti_fraud_flags": ["炸板偏多"] if (row.get("theme_blowup_count") or 0) >= 2 else [],
+                "action_reasoning": f"先看动作：{action}。优先根据板块强度、炸板压力和连板延续性做处理。",
+                "action": action,
+            }
+        )
+
+    main_theme = sector_analysis[0]["sector_name"] if sector_analysis else "无明确主线"
+    secondary_theme = sector_analysis[1]["sector_name"] if len(sector_analysis) > 1 else "无"
+    retreat_candidates = [s for s in sector_analysis if s.get("action") == "回避"]
+    retreat_theme = retreat_candidates[0]["sector_name"] if retreat_candidates else "无明显退潮方向"
+
+    risk_flags = []
+    if blowup_rate >= 0.35:
+        risk_flags.append("炸板率偏高，追高容错差")
+    if limit_down >= 5:
+        risk_flags.append("跌停家数偏多，退潮压力仍在")
+    if highest_board >= 5 and blowup_rate >= 0.25:
+        risk_flags.append("高标仍在，但高位分歧开始放大")
+    if not risk_flags:
+        risk_flags.append("当前无极端风险，但仍应只围绕强板块行动")
+
+    return {
+        "market_overview": {
+            "environment_reasoning": f"先看结论：当前环境定性为{environment_label}。理由是涨停 {limit_up}、跌停 {limit_down}、炸板率 {blowup_rate}、最高板 {highest_board}。",
+            "environment_label": environment_label,
+            "emotion_cycle_reasoning": f"先看周期：当前更像{emotion_cycle}。主要依据是连板延续、炸板压力和跌停反馈。",
+            "emotion_cycle": emotion_cycle,
+            "market_score_reasoning": f"先看分数：当前市场分数为 {market_score}，核心依据是情绪强弱与风险反馈并存。",
+            "market_score": market_score,
+            "turnover_total": float(market.get("market_turnover_total") or 0),
+            "up_count": float(market.get("up_count") or 0),
+            "down_count": float(market.get("down_count") or 0),
+            "limit_up_count": float(limit_up),
+            "limit_down_count": float(limit_down),
+            "blowup_rate": float(blowup_rate),
+            "highest_board": float(highest_board),
+            "northbound_net_inflow": float(market.get("northbound_net_inflow") or 0),
+            "main_theme": main_theme,
+            "secondary_theme": secondary_theme,
+            "retreat_theme": retreat_theme,
+            "recommended_style_reasoning": f"先看打法：当前更适合{recommended_style}。",
+            "recommended_style": recommended_style,
+            "forbidden_style_reasoning": f"先看禁区：当前最该避免的是{forbidden_style}。",
+            "forbidden_style": forbidden_style,
+            "allow_level_2_reasoning": "指数模式下继续做板块层分析是必要的。",
+            "allow_level_2": True,
+            "risk_flags": risk_flags,
+        },
+        "sector_analysis": sector_analysis,
+        "stock_analysis": [],
+    }
+
+
 def append_jsonl(path: Path, rows: list[dict[str, Any]]) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     existing_keys = set()
@@ -162,9 +316,9 @@ def main() -> int:
 
             if result is None:
                 if args.fallback_example_output_on_fail:
-                    print("[Master] falling back to examples/output-example.json", file=sys.stderr)
-                    result = load_json(ROOT / "examples" / "output-example.json")
-                    input_warnings.append("model_call_failed_fallback_to_example_output")
+                    print("[Master] falling back to local rule engine", file=sys.stderr)
+                    result = build_local_fallback_result(input_data)
+                    input_warnings.append("model_call_failed_fallback_to_local_rules")
                 else:
                     raise RuntimeError(f"model path failed after retries: {last_error}")
 
