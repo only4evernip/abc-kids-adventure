@@ -113,6 +113,17 @@ class AkshareCollector(BaseCollector):
         value = row.get("close")
         return float(value) if value is not None else None
 
+    def _normalize_trade_date_ymd(self, trade_date: Optional[str]) -> str:
+        if not trade_date:
+            raise CollectorError("trade_date is required for akshare sentiment pools")
+        return str(trade_date).replace("-", "")
+
+    def _safe_len(self, df) -> Optional[int]:
+        try:
+            return int(len(df)) if df is not None else None
+        except Exception:
+            return None
+
     def collect_market_snapshot(self, config: CollectorConfig) -> Dict[str, Any]:
         try:
             idx_sh = self.ak.stock_zh_index_daily(symbol="sh000001")
@@ -127,6 +138,33 @@ class AkshareCollector(BaseCollector):
             date_val = last_row.get("date")
             trade_date = str(date_val) if date_val is not None else None
 
+        zt_pool = None
+        dt_pool = None
+        zb_pool = None
+        strong_pool = None
+        try:
+            pool_date = self._normalize_trade_date_ymd(trade_date)
+            zt_pool = self.ak.stock_zt_pool_em(date=pool_date)
+            dt_pool = self.ak.stock_zt_pool_dtgc_em(date=pool_date)
+            zb_pool = self.ak.stock_zt_pool_zbgc_em(date=pool_date)
+            strong_pool = self.ak.stock_zt_pool_strong_em(date=pool_date)
+        except Exception:
+            pass
+
+        zt_count = self._safe_len(zt_pool)
+        dt_count = self._safe_len(dt_pool)
+        zb_count = self._safe_len(zb_pool)
+        highest_board = None
+        if zt_pool is not None and len(zt_pool) > 0 and "连板数" in zt_pool.columns:
+            try:
+                highest_board = int(zt_pool["连板数"].max())
+            except Exception:
+                highest_board = None
+
+        blowup_rate = None
+        if zt_count is not None and zb_count is not None and (zt_count + zb_count) > 0:
+            blowup_rate = zb_count / (zt_count + zb_count)
+
         return {
             "trade_date": trade_date,
             "sh_index_close": self._last_close(idx_sh),
@@ -140,11 +178,11 @@ class AkshareCollector(BaseCollector):
             "market_turnover_change": None,
             "up_count": None,
             "down_count": None,
-            "limit_up_count": None,
-            "limit_down_count": None,
-            "blowup_count": None,
-            "blowup_rate": None,
-            "highest_board": None,
+            "limit_up_count": zt_count,
+            "limit_down_count": dt_count,
+            "blowup_count": zb_count,
+            "blowup_rate": blowup_rate,
+            "highest_board": highest_board,
             "yesterday_limit_up_premium": None,
             "high_level_stock_drawdown_flag": None,
             "northbound_net_inflow": None,
@@ -206,6 +244,30 @@ class AkshareCollector(BaseCollector):
         def attach_theme(symbol: str, theme_name: str):
             symbol_theme_map.setdefault(symbol, []).append(theme_name)
 
+        limit_up_map: Dict[str, Dict[str, Any]] = {}
+        limit_down_set = set()
+        blowup_set = set()
+        try:
+            pool_date = self._normalize_trade_date_ymd(config.trade_date or self.collect_market_snapshot(config).get("trade_date"))
+            zt_pool = self.ak.stock_zt_pool_em(date=pool_date)
+            dt_pool = self.ak.stock_zt_pool_dtgc_em(date=pool_date)
+            zb_pool = self.ak.stock_zt_pool_zbgc_em(date=pool_date)
+
+            if zt_pool is not None and len(zt_pool) > 0:
+                for _, row in zt_pool.iterrows():
+                    limit_up_map[str(row.get("代码"))] = {
+                        "board_count": row.get("连板数"),
+                        "sealed_order_strength": row.get("封板资金"),
+                    }
+            if dt_pool is not None and len(dt_pool) > 0:
+                for _, row in dt_pool.iterrows():
+                    limit_down_set.add(str(row.get("代码")))
+            if zb_pool is not None and len(zb_pool) > 0:
+                for _, row in zb_pool.iterrows():
+                    blowup_set.add(str(row.get("代码")))
+        except Exception:
+            pass
+
         for theme in concept_themes[:3]:
             try:
                 df = self.ak.stock_board_concept_cons_em(symbol=theme.get("theme_name"))
@@ -246,9 +308,11 @@ class AkshareCollector(BaseCollector):
                 matched_themes = symbol_theme_map.get(symbol, [])
                 main_theme_name = matched_themes[0] if matched_themes else None
 
+                symbol_key = str(row.get("股票代码"))
+                zt_info = limit_up_map.get(symbol_key, {})
                 rows.append(
                     {
-                        "symbol": str(row.get("股票代码")),
+                        "symbol": symbol_key,
                         "name": info_map.get("股票简称"),
                         "close_price": row.get("收盘"),
                         "open_price": row.get("开盘"),
@@ -260,18 +324,18 @@ class AkshareCollector(BaseCollector):
                         "volume_ratio": None,
                         "circulating_market_cap": info_map.get("流通市值"),
                         "total_market_cap": info_map.get("总市值"),
-                        "board_count": None,
-                        "days_since_last_limit_up": None,
+                        "board_count": zt_info.get("board_count", 0),
+                        "days_since_last_limit_up": 0 if symbol_key in limit_up_map else None,
                         "is_recent_high_stock": None,
                         "is_previous_cycle_core": None,
                         "ma5": ma5,
                         "ma10": ma10,
                         "ma20": ma20,
                         "ma60": ma60,
-                        "limit_up_flag": None,
-                        "limit_down_flag": None,
-                        "blowup_flag": None,
-                        "sealed_order_strength": None,
+                        "limit_up_flag": symbol_key in limit_up_map,
+                        "limit_down_flag": symbol_key in limit_down_set,
+                        "blowup_flag": symbol_key in blowup_set,
+                        "sealed_order_strength": zt_info.get("sealed_order_strength"),
                         "industry": info_map.get("行业"),
                         "concept_tags": matched_themes,
                         "main_theme_name": main_theme_name,
