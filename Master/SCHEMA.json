@@ -163,6 +163,29 @@
           "action"
         ]
       }
+    },
+    "allocation_plan": {
+      "type": "object",
+      "properties": {
+        "plan_reasoning": { "type": "string" },
+        "total_equity_target": { "type": "number" },
+        "true_defensive_weight": { "type": "number" },
+        "equity_defensive_weight": { "type": "number" },
+        "core_weight": { "type": "number" },
+        "satellite_weight": { "type": "number" },
+        "a_share_weight": { "type": "number" },
+        "h_share_weight": { "type": "number" },
+        "rebalance_action": { "type": "string" },
+        "rebalance_reasoning": { "type": "string" },
+        "fund_pool_focus": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "risk_controls": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
     }
   },
   "required": ["market_overview", "sector_analysis", "stock_analysis"]

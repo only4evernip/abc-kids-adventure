@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 def render_report(result: Dict[str, Any]) -> str:
     mo = result["market_overview"]
     sectors = result.get("sector_analysis", [])
+    allocation = result.get("allocation_plan", {})
 
     def display(value: Any, fallback: str = "待补实时数据") -> Any:
         return fallback if value is None or value == "" else value
@@ -40,6 +41,22 @@ def render_report(result: Dict[str, Any]) -> str:
     lines.append(f"- **跌停数：** {mo.get('limit_down_count', '')}")
     lines.append(f"- **炸板率：** {mo.get('blowup_rate', '')}")
     lines.append(f"- **最高板：** {mo.get('highest_board', '')}")
+    if allocation:
+        lines.append("")
+        lines.append("## 基金组合配置建议")
+        lines.append(f"- **总权益目标仓位：** {allocation.get('total_equity_target', '')}%")
+        lines.append(f"- **真防守：** {allocation.get('true_defensive_weight', '')}%")
+        lines.append(f"- **权益防守：** {allocation.get('equity_defensive_weight', '')}%")
+        lines.append(f"- **核心仓：** {allocation.get('core_weight', '')}%")
+        lines.append(f"- **卫星仓：** {allocation.get('satellite_weight', '')}%")
+        lines.append(f"- **A股 / H股：** {allocation.get('a_share_weight', '')}% / {allocation.get('h_share_weight', '')}%")
+        lines.append(f"- **执行动作：** {allocation.get('rebalance_action', '')}")
+        lines.append(f"- **配置理由：** {allocation.get('plan_reasoning', '')}")
+        pool = allocation.get('fund_pool_focus', []) or []
+        if pool:
+            lines.append("- **关注基金池：**")
+            for item in pool:
+                lines.append(f"  - {item}")
     lines.append("")
     lines.append("## 主线与轮动观察")
     for s in sectors[:5]:

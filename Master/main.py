@@ -183,6 +183,74 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
     if not risk_flags:
         risk_flags.append("当前无极端风险，但仍应只围绕强板块行动")
 
+    if environment_label == "进攻":
+        total_equity_target = 90
+        true_defensive_weight = 10
+        equity_defensive_weight = 20
+        core_weight = 50
+        satellite_weight = 20
+        rebalance_action = "提高权益仓位，核心仓优先，卫星仓小步跟进"
+    elif environment_label == "试错":
+        total_equity_target = 60
+        true_defensive_weight = 40
+        equity_defensive_weight = 20
+        core_weight = 30
+        satellite_weight = 10
+        rebalance_action = "维持中等权益仓位，先配核心和权益防守，卫星仓低配"
+    elif environment_label == "防守":
+        total_equity_target = 20
+        true_defensive_weight = 80
+        equity_defensive_weight = 10
+        core_weight = 10
+        satellite_weight = 0
+        rebalance_action = "大幅降仓，减出资金优先转入真防守池"
+    else:
+        total_equity_target = 40
+        true_defensive_weight = 60
+        equity_defensive_weight = 15
+        core_weight = 20
+        satellite_weight = 5
+        rebalance_action = "低仓运行，以观察和等待为主"
+
+    if secondary_theme in {"恒生科技", "互联网", "港股互联网", "中概互联"}:
+        a_share_weight = 45
+        h_share_weight = 55
+    elif main_theme in {"高股息", "红利", "央企价值"}:
+        a_share_weight = 70
+        h_share_weight = 30
+    else:
+        a_share_weight = 60
+        h_share_weight = 40
+
+    fund_pool_focus = [
+        "A股核心池：沪深300ETF / 中证A500ETF",
+        "H股核心池：恒生指数ETF / 恒生国企ETF",
+        "权益防守池：红利ETF / 高股息ETF / 央企价值ETF",
+    ]
+    if satellite_weight > 0:
+        fund_pool_focus.append("卫星池：恒生科技ETF / 中概互联网ETF / 中小盘指增")
+    if true_defensive_weight > 0:
+        fund_pool_focus.append("真防守池：货币基金 / 短债基金 / 同业存单指数基金")
+
+    allocation_plan = {
+        "plan_reasoning": f"先看配置结论：当前总权益目标仓位 {total_equity_target}% 。依据是环境 {environment_label}、情绪 {emotion_cycle}、主线 {main_theme} 和风险标记 {', '.join(risk_flags)}。",
+        "total_equity_target": total_equity_target,
+        "true_defensive_weight": true_defensive_weight,
+        "equity_defensive_weight": equity_defensive_weight,
+        "core_weight": core_weight,
+        "satellite_weight": satellite_weight,
+        "a_share_weight": a_share_weight,
+        "h_share_weight": h_share_weight,
+        "rebalance_action": rebalance_action,
+        "rebalance_reasoning": f"先看执行动作：{rebalance_action}。当前优先做仓位纪律，不做激进预判。",
+        "fund_pool_focus": fund_pool_focus,
+        "risk_controls": [
+            "若核心宽基跌破120日线，核心仓和卫星仓继续下调",
+            "卫星仓默认低配，只有趋势与波动同时配合时再提高",
+            "组合新增仓位优先投向核心ETF，不优先投高弹性资产",
+        ],
+    }
+
     return {
         "market_overview": {
             "environment_reasoning": f"先看结论：当前环境定性为{environment_label}。理由是涨停 {limit_up}、跌停 {limit_down}、炸板率 {blowup_rate}、最高板 {highest_board}。",
@@ -212,6 +280,7 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
         },
         "sector_analysis": sector_analysis,
         "stock_analysis": [],
+        "allocation_plan": allocation_plan,
     }
 
 
