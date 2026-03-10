@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -134,6 +135,8 @@ class AkshareCollector(BaseCollector):
 
         last_row = self._last_row(idx_sh)
         trade_date = config.trade_date
+        if trade_date is None:
+            trade_date = datetime.now().strftime("%Y-%m-%d")
         if trade_date is None and last_row is not None:
             date_val = last_row.get("date")
             trade_date = str(date_val) if date_val is not None else None

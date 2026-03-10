@@ -80,52 +80,63 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
         recommended_style = "只盯强辨识度方向，避免频繁出手"
         forbidden_style = "禁止预判全面主升、禁止见涨就追"
 
+    def sector_metrics(row: Dict[str, Any]) -> Dict[str, float]:
+        return {
+            "zt": float(row.get("theme_limit_up_count") or 0),
+            "zb": float(row.get("theme_blowup_count") or 0),
+            "hb": float(row.get("theme_highest_board") or 0),
+            "lb": float(row.get("theme_leader_board_count") or 0),
+            "chg": float(row.get("theme_change_pct") or 0),
+        }
+
     ranked_sectors = sorted(
         sectors,
         key=lambda x: (
-            x.get("theme_limit_up_count") or 0,
-            -(x.get("theme_blowup_count") or 0),
-            x.get("theme_highest_board") or 0,
-            x.get("theme_change_pct") or 0,
+            sector_metrics(x)["zt"] * 10
+            + sector_metrics(x)["hb"] * 6
+            + sector_metrics(x)["lb"] * 3
+            + sector_metrics(x)["chg"]
+            - sector_metrics(x)["zb"] * 5
         ),
         reverse=True,
     )
 
     def sector_stage(row: Dict[str, Any]) -> str:
-        zt = row.get("theme_limit_up_count") or 0
-        zb = row.get("theme_blowup_count") or 0
-        hb = row.get("theme_highest_board") or 0
-        chg = row.get("theme_change_pct") or 0
-        if hb >= 4 and zt >= 2 and zb <= 1:
+        m = sector_metrics(row)
+        if m["hb"] >= 4 and m["zt"] >= 2 and m["zb"] <= 1:
             return "主升"
-        if zt >= 2 and chg >= 2:
+        if m["zt"] >= 3 and m["chg"] >= 2:
             return "发酵"
-        if zb >= max(2, zt) or chg < 0:
+        if m["zt"] >= 1 and m["zb"] <= max(1, m["zt"] / 2):
+            return "启动"
+        if m["zb"] >= max(3, m["zt"]) or m["chg"] < 0:
             return "退潮反抽"
-        return "观察"
+        return "强分歧"
 
     def sector_health(row: Dict[str, Any]) -> str:
-        zt = row.get("theme_limit_up_count") or 0
-        zb = row.get("theme_blowup_count") or 0
-        if zt >= 3 and zb == 0:
+        m = sector_metrics(row)
+        if m["zt"] >= 4 and m["zb"] <= 1:
             return "健康"
-        if zt >= 1 and zb <= 1:
+        if m["zt"] >= 2 and m["zb"] <= 2:
             return "一般"
-        if zb >= 2:
+        if m["zb"] >= max(3, m["zt"]):
             return "危险"
         return "分歧"
 
     sector_analysis = []
     for idx, row in enumerate(ranked_sectors[:5]):
+        m = sector_metrics(row)
         stage = sector_stage(row)
         health = sector_health(row)
-        score = min(95, 40 + (row.get("theme_limit_up_count") or 0) * 8 + (row.get("theme_highest_board") or 0) * 5 - (row.get("theme_blowup_count") or 0) * 6)
-        is_main = idx == 0 and score >= 55
-        if stage in {"退潮反抽"} or health == "危险":
+        score = min(95, 35 + m["zt"] * 8 + m["hb"] * 5 + m["lb"] * 3 - m["zb"] * 4 + m["chg"])
+        is_main = idx == 0 and score >= 70
+        if stage == "退潮反抽" and health == "危险":
             action = "回避"
         elif is_main:
             action = "重点跟踪"
-        elif score >= 55:
+        elif score >= 72:
+            action = "可择机参与"
+        elif score >= 58:
             action = "小仓试错"
         else:
             action = "观察"
@@ -133,22 +144,26 @@ def build_local_fallback_result(input_data: Dict[str, Any]) -> Dict[str, Any]:
         sector_analysis.append(
             {
                 "sector_name": row.get("theme_name") or f"板块{idx+1}",
-                "sector_reasoning": f"先看结论：该方向当前{action}。理由是涨停 {row.get('theme_limit_up_count') or 0} 家、炸板 {row.get('theme_blowup_count') or 0} 家、最高板 {row.get('theme_highest_board') or 0}。",
-                "sector_stage_reasoning": f"先看阶段：当前更像{stage}。理由是板块强度、连板高度和炸板情况共同决定。",
-                "sector_stage": stage if stage in {"启动", "发酵", "主升", "强分歧", "高位震荡", "退潮", "退潮反抽", "一日游"} else "发酵",
-                "sector_score_reasoning": f"先看分数：综合涨停密度、炸板压力、连板高度后，板块分数为 {score}。",
+                "sector_reasoning": f"先看结论：该方向当前{action}。理由是涨停 {int(m['zt'])} 家、炸板 {int(m['zb'])} 家、最高板 {int(m['hb'])}、龙头板数 {int(m['lb'])}。",
+                "sector_stage_reasoning": f"先看阶段：当前更像{stage}。理由是涨停密度、龙头高度和炸板压力共同决定。",
+                "sector_stage": stage,
+                "sector_score_reasoning": f"先看分数：综合涨停密度、炸板压力、连板高度和龙头强度后，板块分数为 {score}。",
                 "sector_score": score,
                 "leader_stock": row.get("theme_leader_stock") or "",
                 "core_midcap_stock": "",
-                "follow_strength": "较强" if (row.get("theme_limit_up_count") or 0) >= 3 else "一般",
+                "theme_limit_up_count": int(m["zt"]),
+                "theme_blowup_count": int(m["zb"]),
+                "theme_highest_board": int(m["hb"]),
+                "theme_leader_board_count": int(m["lb"]),
+                "follow_strength": "较强" if m["zt"] >= 4 else ("一般" if m["zt"] >= 2 else "弱"),
                 "health_reasoning": f"先看健康度：当前为{health}。核心依据是涨停密度与炸板压力的对比。",
-                "health_status": health if health in {"健康", "一般", "分歧", "危险"} else "一般",
+                "health_status": health,
                 "is_main_theme_reasoning": f"先看主线资格：{'具备' if is_main else '暂不具备'}当前主线特征。",
                 "is_main_theme": is_main,
                 "allow_level_3_reasoning": "当前运行在指数模式，不下钻个股层。",
                 "allow_level_3": False,
-                "anti_fraud_flags": ["炸板偏多"] if (row.get("theme_blowup_count") or 0) >= 2 else [],
-                "action_reasoning": f"先看动作：{action}。优先根据板块强度、炸板压力和连板延续性做处理。",
+                "anti_fraud_flags": ["炸板偏多"] if m["zb"] >= 3 else [],
+                "action_reasoning": f"先看动作：{action}。优先根据板块强度、炸板压力、龙头高度和延续性做处理。",
                 "action": action,
             }
         )
