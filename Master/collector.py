@@ -146,6 +146,40 @@ class AkshareCollector(BaseCollector):
         except Exception:
             return None
 
+    def _get_akshare_market_extras(self) -> Dict[str, Any]:
+        result: Dict[str, Any] = {}
+
+        try:
+            spot_df = self.ak.stock_zh_a_spot_em()
+            if spot_df is not None and len(spot_df) > 0:
+                if "成交额" in spot_df.columns:
+                    turnover = spot_df["成交额"].fillna(0).sum()
+                    result["market_turnover_total"] = self._to_float(turnover)
+                if "涨跌幅" in spot_df.columns:
+                    pct = spot_df["涨跌幅"].fillna(0)
+                    result["up_count"] = int((pct > 0).sum())
+                    result["down_count"] = int((pct < 0).sum())
+        except Exception:
+            pass
+
+        try:
+            idx_spot = self.ak.stock_zh_index_spot_sina()
+            if idx_spot is not None and len(idx_spot) > 0 and "代码" in idx_spot.columns:
+                idx_map = {
+                    "sh000300": "hs300_close",
+                    "sh000905": "zz500_close",
+                    "sh000852": "zz1000_close",
+                    "sh000688": "kc50_close",
+                }
+                for code, field in idx_map.items():
+                    sub = idx_spot[idx_spot["代码"] == code]
+                    if len(sub) > 0:
+                        result[field] = self._to_float(sub.iloc[0].get("最新价"))
+        except Exception:
+            pass
+
+        return result
+
     def _get_tushare_market_extras(self, trade_date: Optional[str]) -> Dict[str, Any]:
         if not self.ts_pro:
             return {}
@@ -188,14 +222,6 @@ class AkshareCollector(BaseCollector):
             if money_df is not None and len(money_df) > 0:
                 row = money_df.iloc[0]
                 result["northbound_net_inflow"] = self._to_float(row.get("buy_elg_amount"))
-        except Exception:
-            pass
-
-        try:
-            adv_df = self.ts_pro.daily_basic(trade_date=trade_date_ymd, fields="ts_code,trade_date,total_mv")
-            if adv_df is not None and len(adv_df) > 0:
-                result["up_count"] = None
-                result["down_count"] = None
         except Exception:
             pass
 
@@ -266,6 +292,7 @@ class AkshareCollector(BaseCollector):
             "high_level_stock_drawdown_flag": None,
             "northbound_net_inflow": None,
         }
+        result.update({k: v for k, v in self._get_akshare_market_extras().items() if v is not None})
         result.update({k: v for k, v in self._get_tushare_market_extras(trade_date).items() if v is not None})
         return result
 
