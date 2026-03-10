@@ -56,7 +56,7 @@ python3 Master/main.py \
 
 ### 指数策略骨架
 当前已单独拆出：
-- `INDEX_STRATEGY_RULES.md`：环境分档、配置桶、A/H 分配、调仓阈值
+- `INDEX_STRATEGY_RULES.md`：环境分档、配置桶、A/H 分配、权重映射表、调仓阈值
 - `INDEX_ETF_POOL.md`：真防守 / 权益防守 / 核心仓 / 卫星仓的 ETF / 基金池
 
 ---
