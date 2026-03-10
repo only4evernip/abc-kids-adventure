@@ -195,25 +195,70 @@ class AkshareCollector(BaseCollector):
         except Exception as exc:
             raise CollectorError(f"akshare theme fetch failed: {exc}")
 
+        trade_date = config.trade_date or self.collect_market_snapshot(config).get("trade_date")
+        zt_symbols = set()
+        zb_symbols = set()
+        zt_board_map: Dict[str, Any] = {}
+        try:
+            pool_date = self._normalize_trade_date_ymd(trade_date)
+            zt_pool = self.ak.stock_zt_pool_em(date=pool_date)
+            zb_pool = self.ak.stock_zt_pool_zbgc_em(date=pool_date)
+            if zt_pool is not None and len(zt_pool) > 0:
+                for _, row in zt_pool.iterrows():
+                    code = str(row.get("代码"))
+                    zt_symbols.add(code)
+                    zt_board_map[code] = row.get("连板数")
+            if zb_pool is not None and len(zb_pool) > 0:
+                for _, row in zb_pool.iterrows():
+                    zb_symbols.add(str(row.get("代码")))
+        except Exception:
+            pass
+
         rows: List[Dict[str, Any]] = []
 
-        def convert(df, theme_type: str):
-            for idx, row in enumerate(df.iterrows()):
-                _, row = row
+        def convert(df, theme_type: str, cons_fetcher):
+            for idx, item in enumerate(df.iterrows()):
+                _, row = item
+                theme_name = row.get("板块名称")
+                theme_limit_up_count = None
+                theme_blowup_count = None
+                theme_highest_board = None
+                theme_leader_board_count = None
+                try:
+                    cons_df = cons_fetcher(symbol=theme_name)
+                    if cons_df is not None and len(cons_df) > 0 and "代码" in cons_df.columns:
+                        symbols = {str(x) for x in cons_df["代码"].head(80).tolist() if x is not None}
+                        theme_limit_up_count = sum(1 for s in symbols if s in zt_symbols)
+                        theme_blowup_count = sum(1 for s in symbols if s in zb_symbols)
+                        board_values = [zt_board_map[s] for s in symbols if s in zt_board_map and zt_board_map[s] is not None]
+                        if board_values:
+                            try:
+                                theme_highest_board = int(max(board_values))
+                            except Exception:
+                                theme_highest_board = None
+                        leader_name = row.get("领涨股票")
+                        leader_rows = cons_df[cons_df["名称"] == leader_name] if "名称" in cons_df.columns else None
+                        if leader_rows is not None and len(leader_rows) > 0:
+                            leader_code = str(leader_rows.iloc[0].get("代码"))
+                            if leader_code in zt_board_map:
+                                theme_leader_board_count = zt_board_map.get(leader_code)
+                except Exception:
+                    pass
+
                 rows.append(
                     {
-                        "theme_name": row.get("板块名称"),
+                        "theme_name": theme_name,
                         "theme_type": theme_type,
                         "theme_change_pct": row.get("涨跌幅"),
                         "theme_turnover": None,
                         "theme_turnover_change": None,
                         "theme_turnover_ratio": None,
                         "theme_money_flow_ratio": None,
-                        "theme_limit_up_count": None,
-                        "theme_blowup_count": None,
-                        "theme_highest_board": None,
+                        "theme_limit_up_count": theme_limit_up_count,
+                        "theme_blowup_count": theme_blowup_count,
+                        "theme_highest_board": theme_highest_board,
                         "theme_leader_stock": row.get("领涨股票"),
-                        "theme_leader_board_count": None,
+                        "theme_leader_board_count": theme_leader_board_count,
                         "theme_midcap_core_stock": None,
                         "theme_core_stock_count": None,
                         "theme_follow_count": row.get("上涨家数"),
@@ -226,8 +271,8 @@ class AkshareCollector(BaseCollector):
                     }
                 )
 
-        convert(concept_df, "概念板块")
-        convert(industry_df, "行业板块")
+        convert(concept_df, "概念板块", self.ak.stock_board_concept_cons_em)
+        convert(industry_df, "行业板块", self.ak.stock_board_industry_cons_em)
         return rows
 
     def collect_stock_snapshot(self, config: CollectorConfig) -> List[Dict[str, Any]]:
