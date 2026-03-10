@@ -60,6 +60,7 @@ python3 Master/main.py \
 - `INDEX_ETF_POOL.md`：真防守 / 权益防守 / 核心仓 / 卫星仓的 ETF / 基金池
 - `INDEX_STRATEGY_SCHEMA.json`：指数策略独立 JSON 输出契约
 - `INDEX_STRATEGY_TEMPLATE.md`：指数策略日报模板
+- `index_strategy.py`：读取现有市场快照并直接产出指数策略 JSON / 日报的最小入口
 
 ---
 
@@ -130,6 +131,7 @@ Master/
 ├── INDEX_ETF_POOL.md           # 指数策略 ETF / 基金池
 ├── INDEX_STRATEGY_SCHEMA.json  # 指数策略独立输出契约
 ├── INDEX_STRATEGY_TEMPLATE.md  # 指数策略日报模板
+├── index_strategy.py           # 指数策略最小可跑入口
 ├── main.py                     # 最小可跑入口
 ├── judge.py                    # 模型调用层
 ├── validator.py                # 校验层
