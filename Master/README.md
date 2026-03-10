@@ -58,6 +58,8 @@ python3 Master/main.py \
 当前已单独拆出：
 - `INDEX_STRATEGY_RULES.md`：环境分档、配置桶、A/H 分配、权重映射表、调仓阈值
 - `INDEX_ETF_POOL.md`：真防守 / 权益防守 / 核心仓 / 卫星仓的 ETF / 基金池
+- `INDEX_STRATEGY_SCHEMA.json`：指数策略独立 JSON 输出契约
+- `INDEX_STRATEGY_TEMPLATE.md`：指数策略日报模板
 
 ---
 
@@ -126,6 +128,8 @@ Master/
 ├── MAIN_PY_DESIGN.md           # main.py 原型设计说明
 ├── INDEX_STRATEGY_RULES.md     # 指数策略规则骨架
 ├── INDEX_ETF_POOL.md           # 指数策略 ETF / 基金池
+├── INDEX_STRATEGY_SCHEMA.json  # 指数策略独立输出契约
+├── INDEX_STRATEGY_TEMPLATE.md  # 指数策略日报模板
 ├── main.py                     # 最小可跑入口
 ├── judge.py                    # 模型调用层
 ├── validator.py                # 校验层

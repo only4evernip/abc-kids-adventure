@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "required": [
+    "environment_label",
+    "environment_reasoning",
+    "allocation_plan",
+    "rebalance_plan",
+    "risk_flags",
+    "watch_points"
+  ],
+  "properties": {
+    "environment_label": {
+      "type": "string",
+      "enum": ["进攻", "试错", "混沌", "防守"]
+    },
+    "environment_reasoning": { "type": "string" },
+    "allocation_plan": {
+      "type": "object",
+      "required": [
+        "total_equity_target",
+        "true_defensive_weight",
+        "equity_defensive_weight",
+        "core_weight",
+        "satellite_weight",
+        "a_share_weight",
+        "h_share_weight",
+        "allocation_summary"
+      ],
+      "properties": {
+        "total_equity_target": { "type": "number" },
+        "true_defensive_weight": { "type": "number" },
+        "equity_defensive_weight": { "type": "number" },
+        "core_weight": { "type": "number" },
+        "satellite_weight": { "type": "number" },
+        "a_share_weight": { "type": "number" },
+        "h_share_weight": { "type": "number" },
+        "allocation_summary": { "type": "string" }
+      }
+    },
+    "rebalance_plan": {
+      "type": "object",
+      "required": ["needs_rebalance", "rebalance_action", "rebalance_reasoning"],
+      "properties": {
+        "needs_rebalance": { "type": "boolean" },
+        "rebalance_action": { "type": "string" },
+        "rebalance_reasoning": { "type": "string" },
+        "bucket_changes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["bucket_name", "change_direction", "change_pct", "reasoning"],
+            "properties": {
+              "bucket_name": { "type": "string" },
+              "change_direction": { "type": "string", "enum": ["增加", "减少", "维持"] },
+              "change_pct": { "type": "number" },
+              "reasoning": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "risk_flags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "watch_points": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fund_pool_focus": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
