@@ -2,7 +2,7 @@ import Papa from "papaparse";
 import { calculateRps } from "../domain/rps";
 import { db } from "../lib/db";
 import { csvRowSchema, toProductRow } from "../lib/csvSchema";
-import type { ProductRecord, ProductRow } from "../types/product";
+import type { ProductRecord, ProductRow, WorkflowStatus } from "../types/product";
 
 export interface ScoreWorkerInput {
   batchId: string;
@@ -38,10 +38,28 @@ function hashString(input: string) {
   return (hash >>> 0).toString(36);
 }
 
+function normalizeText(value?: string) {
+  return (value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeUrlPath(value?: string) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    return `${url.hostname}${url.pathname}`.replace(/\/+$/, "").toLowerCase();
+  } catch {
+    return value.trim().toLowerCase().split(/[?#]/)[0] || "";
+  }
+}
+
 function stableProductId(row: ProductRow) {
-  const base = [row.market, row.platformSite, row.asin || row.keyword, row.productDirection]
-    .map((v) => (v || "").trim().toLowerCase())
-    .join("|");
+  const asin = normalizeText(row.asin);
+  const urlPath = normalizeUrlPath(row.productUrl);
+  const title = normalizeText(row.title).slice(0, 120);
+  const fallbackKeyword = normalizeText(row.keyword);
+  const fallbackDirection = normalizeText(row.productDirection);
+
+  const base = [normalizeText(row.market), normalizeText(row.platformSite), asin, urlPath, title, fallbackKeyword, fallbackDirection].join("|");
   return `prd_${hashString(base)}`;
 }
 
@@ -55,14 +73,38 @@ function buildRecord(row: ProductRow, batchId: string): ProductRecord {
     importBatchId: batchId,
     importedAt,
     workflowStatus: rps.suggestedStatus,
+    workflowStatusSource: "system",
+    workflowStatusUpdatedAt: importedAt,
     notes: "",
     rps,
   };
 }
 
+function mergeImportedRecord(existing: ProductRecord | undefined, incoming: ProductRecord): ProductRecord {
+  if (!existing) return incoming;
+
+  const manualStatusLocked = existing.workflowStatusSource === "manual";
+  const workflowStatus: WorkflowStatus = manualStatusLocked ? existing.workflowStatus : incoming.rps.suggestedStatus;
+
+  return {
+    ...existing,
+    ...incoming,
+    notes: existing.notes ?? "",
+    workflowStatus,
+    workflowStatusSource: manualStatusLocked ? "manual" : "system",
+    workflowStatusUpdatedAt: manualStatusLocked
+      ? existing.workflowStatusUpdatedAt ?? existing.importedAt
+      : incoming.importedAt,
+  };
+}
+
 async function bulkSave(records: ProductRecord[]) {
   if (records.length === 0) return;
-  await db.products.bulkPut(records);
+
+  const existingRecords = await db.products.bulkGet(records.map((record) => record.id));
+  const mergedRecords = records.map((record, index) => mergeImportedRecord(existingRecords[index] ?? undefined, record));
+
+  await db.products.bulkPut(mergedRecords);
 }
 
 function parseCsvFile(file: File): Promise<Record<string, unknown>[]> {

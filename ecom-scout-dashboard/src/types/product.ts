@@ -76,11 +76,15 @@ export interface RpsResult {
   falsePositiveTags: string[];
 }
 
+export type WorkflowStatusSource = "system" | "manual";
+
 export interface ProductRecord extends ProductRow {
   id: string;
   importBatchId: string;
   importedAt: string;
   workflowStatus: WorkflowStatus;
+  workflowStatusSource: WorkflowStatusSource;
+  workflowStatusUpdatedAt?: string;
   notes?: string;
   rps: RpsResult;
 }
