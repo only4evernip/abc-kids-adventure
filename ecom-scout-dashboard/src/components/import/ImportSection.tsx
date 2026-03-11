@@ -10,6 +10,8 @@ interface Props {
   lastMessage: string;
   onImportFile: (file?: File | null) => void;
   onImportSample: () => void;
+  onImportSessionFile: (file?: File | null) => void;
+  onExportSession: () => void;
   onClear: () => void;
   totalCount: number;
 }
@@ -25,6 +27,8 @@ export function ImportSection(props: Props) {
     lastMessage,
     onImportFile,
     onImportSample,
+    onImportSessionFile,
+    onExportSession,
     onClear,
     totalCount,
   } = props;
@@ -38,6 +42,13 @@ export function ImportSection(props: Props) {
         </label>
 
         <button onClick={onImportSample} style={actionButton}>导入内置样本</button>
+
+        <label style={actionLabel}>
+          <span>导入 Session JSON</span>
+          <input type="file" accept=".json,application/json" style={{ display: "none" }} onChange={(e) => onImportSessionFile(e.target.files?.[0])} />
+        </label>
+
+        <button onClick={onExportSession} style={actionButton}>导出 Session JSON</button>
         <button onClick={onClear} style={actionButton}>清空本地库</button>
       </section>
 

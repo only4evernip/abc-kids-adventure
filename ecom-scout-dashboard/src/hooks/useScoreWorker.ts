@@ -71,6 +71,7 @@ export function useScoreWorker() {
 
   return {
     lastMessage,
+    setLastMessage,
     importFile,
     importSample,
   };

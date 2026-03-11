@@ -1,15 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import type { SortingState } from "@tanstack/react-table";
-import { db } from "./lib/db";
+import { db, exportSessionPayload, importSessionPayload, updateProductRecord } from "./lib/db";
 import { queryProducts } from "./lib/productQuery";
 import { useScoutStore } from "./store/useScoutStore";
-import type { ProductRecord } from "./types/product";
+import type { ProductRecord, WorkflowStatus } from "./types/product";
 import { useScoreWorker } from "./hooks/useScoreWorker";
 import { ImportSection } from "./components/import/ImportSection";
 import { FilterSidebar } from "./components/discovery/FilterSidebar";
 import { ProductTable } from "./components/discovery/ProductTable";
 import { DetailDrawer } from "./components/detail/DetailDrawer";
+
+function downloadJson(filename: string, content: unknown) {
+  const blob = new Blob([JSON.stringify(content, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function App() {
   const {
@@ -27,7 +37,7 @@ export default function App() {
     setImportProgress,
   } = useScoutStore();
 
-  const { lastMessage, importFile, importSample } = useScoreWorker();
+  const { lastMessage, setLastMessage, importFile, importSample } = useScoreWorker();
   const [sorting, setSorting] = useState<SortingState>([{ id: "score", desc: true }]);
 
   const filteredRows = useLiveQuery(
@@ -71,13 +81,35 @@ export default function App() {
     setImportProgress(0);
     selectProduct(undefined);
     setDetailDrawerOpen(false);
+    setLastMessage("已清空本地产品库");
+  };
+
+  const handleExportSession = async () => {
+    const payload = await exportSessionPayload();
+    const stamp = payload.exportedAt.replace(/[:.]/g, "-");
+    downloadJson(`ecom-scout-session-${stamp}.json`, payload);
+    setLastMessage(`已导出 Session：${payload.products.length} 条记录`);
+  };
+
+  const handleImportSessionFile = async (file?: File | null) => {
+    if (!file) return;
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    const count = await importSessionPayload(payload);
+    setImportMeta({ currentBatchId: "session-import", importedAt: new Date().toISOString(), rowCount: count, errorCount: 0 });
+    setLastMessage(`已导入 Session：${count} 条记录`);
+  };
+
+  const handleSaveDetail = async (id: string, patch: { workflowStatus: WorkflowStatus; notes: string }) => {
+    await updateProductRecord(id, patch);
+    setLastMessage(`已保存：${patch.workflowStatus}${patch.notes ? " + 备注" : ""}`);
   };
 
   return (
     <main style={{ fontFamily: "Inter, system-ui, sans-serif", padding: 24, maxWidth: 1440, margin: "0 auto" }}>
       <h1 style={{ marginBottom: 12 }}>选品侦察台 v1（发现矩阵首屏）</h1>
       <p style={{ color: "#555", lineHeight: 1.7 }}>
-        这版已经不是纯导入页了。现在能做：CSV 导入、Worker 打分、Dexie 入库、发现矩阵筛选、表格排序，以及右侧详情查看。
+        这版已经不是纯导入页了。现在能做：CSV 导入、Worker 打分、Dexie 入库、发现矩阵筛选、表格排序、虚拟滚动，以及右侧详情修改。
       </p>
 
       <ImportSection
@@ -93,6 +125,12 @@ export default function App() {
         }}
         onImportSample={() => {
           void importSample();
+        }}
+        onImportSessionFile={(file) => {
+          void handleImportSessionFile(file);
+        }}
+        onExportSession={() => {
+          void handleExportSession();
         }}
         onClear={() => {
           void handleClear();
@@ -121,7 +159,7 @@ export default function App() {
           }}
         />
 
-        <DetailDrawer row={selectedRow} open={detailDrawerOpen} onClose={() => setDetailDrawerOpen(false)} />
+        <DetailDrawer row={selectedRow} open={detailDrawerOpen} onClose={() => setDetailDrawerOpen(false)} onSave={handleSaveDetail} />
       </section>
     </main>
   );

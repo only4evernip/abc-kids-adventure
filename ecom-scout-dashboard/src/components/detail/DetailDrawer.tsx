@@ -1,10 +1,12 @@
-import type { CSSProperties } from "react";
-import type { ProductRecord } from "../../types/product";
+import { useEffect, useState, type CSSProperties } from "react";
+import { WORKFLOW_STATUS_OPTIONS } from "../../lib/db";
+import type { ProductRecord, WorkflowStatus } from "../../types/product";
 
 interface Props {
   row?: ProductRecord;
   open: boolean;
   onClose: () => void;
+  onSave: (id: string, patch: { workflowStatus: WorkflowStatus; notes: string }) => void;
 }
 
 function badgeStyle(bg: string, color = "#111"): CSSProperties {
@@ -23,7 +25,17 @@ function badgeStyle(bg: string, color = "#111"): CSSProperties {
   };
 }
 
-export function DetailDrawer({ row, open, onClose }: Props) {
+export function DetailDrawer({ row, open, onClose, onSave }: Props) {
+  const [status, setStatus] = useState<WorkflowStatus>("待评估");
+  const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (row) {
+      setStatus(row.workflowStatus);
+      setNotes(row.notes || "");
+    }
+  }, [row]);
+
   if (!open) return null;
 
   return (
@@ -46,6 +58,19 @@ export function DetailDrawer({ row, open, onClose }: Props) {
             <span style={badgeStyle("#eef6ff")}>RPS {row.rps.score.finalScore}</span>
             <span style={badgeStyle("#f5f5f5")}>{row.workflowStatus}</span>
             {row.overallRisk && <span style={badgeStyle("#fff3e6")}>风险 {row.overallRisk}</span>}
+          </div>
+
+          <div style={detailBlock}>
+            <strong>状态修改</strong>
+            <select value={status} onChange={(e) => setStatus(e.target.value as WorkflowStatus)} style={inputStyle}>
+              {WORKFLOW_STATUS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </div>
+
+          <div style={detailBlock}>
+            <strong>本地备注</strong>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} style={{ ...inputStyle, resize: "vertical" }} placeholder="这里写本地判断、供应链线索、人工备注..." />
+            <button onClick={() => onSave(row.id, { workflowStatus: status, notes })} style={{ ...smallButton, marginTop: 10 }}>保存状态与备注</button>
           </div>
 
           <div style={detailBlock}>
@@ -141,4 +166,14 @@ const labelSmall: CSSProperties = {
   fontSize: 13,
   color: "#666",
   fontWeight: 600,
+};
+
+const inputStyle: CSSProperties = {
+  width: "100%",
+  border: "1px solid #ddd",
+  borderRadius: 10,
+  padding: "10px 12px",
+  background: "#fff",
+  boxSizing: "border-box",
+  marginTop: 8,
 };
