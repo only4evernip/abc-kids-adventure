@@ -22,6 +22,7 @@ export function FilterSidebar({ filters, marketOptions, statusOptions, riskOptio
           placeholder="搜关键词 / 产品方向"
           style={inputStyle}
         />
+        <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>输入后会延迟约 250ms 再触发筛选，避免大表卡顿。</div>
       </div>
 
       <div style={fieldBlock}>

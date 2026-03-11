@@ -2,7 +2,19 @@ import { db } from "./db";
 import type { ProductRecord } from "../types/product";
 import type { FilterState } from "../store/useScoutStore";
 
+function normalizeKeyword(value?: string) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function buildKeywordHaystack(row: ProductRecord) {
+  return `${row.keyword} ${row.productDirection} ${row.title || ""}`.toLowerCase();
+}
+
 export async function queryProducts(filters: FilterState): Promise<ProductRecord[]> {
+  const normalizedKeyword = normalizeKeyword(filters.keyword);
+  const hasScoreFilter = filters.minScore != null || filters.maxScore != null;
+  const hasResidualFilter = Boolean(filters.risk || normalizedKeyword || hasScoreFilter);
+
   let collection:
     | ReturnType<typeof db.products.toCollection>
     | ReturnType<typeof db.products.where>;
@@ -17,19 +29,23 @@ export async function queryProducts(filters: FilterState): Promise<ProductRecord
     collection = db.products.toCollection();
   }
 
-  if (filters.risk || filters.keyword || filters.minScore != null || filters.maxScore != null) {
-    collection = collection.filter((row) => {
-      if (filters.risk && row.overallRisk !== filters.risk) return false;
-      if (filters.keyword) {
-        const q = filters.keyword.trim().toLowerCase();
-        const haystack = `${row.keyword} ${row.productDirection} ${row.title || ""}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      if (filters.minScore != null && row.rps.score.finalScore < filters.minScore) return false;
-      if (filters.maxScore != null && row.rps.score.finalScore > filters.maxScore) return false;
-      return true;
-    });
+  if (!hasResidualFilter) {
+    return collection.toArray();
   }
+
+  collection = collection.filter((row) => {
+    if (filters.risk && row.overallRisk !== filters.risk) return false;
+
+    const score = row.rps.score.finalScore;
+    if (filters.minScore != null && score < filters.minScore) return false;
+    if (filters.maxScore != null && score > filters.maxScore) return false;
+
+    if (normalizedKeyword) {
+      if (!buildKeywordHaystack(row).includes(normalizedKeyword)) return false;
+    }
+
+    return true;
+  });
 
   return collection.toArray();
 }

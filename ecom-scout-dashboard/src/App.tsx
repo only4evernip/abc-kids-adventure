@@ -6,6 +6,7 @@ import { queryProducts } from "./lib/productQuery";
 import { useScoutStore } from "./store/useScoutStore";
 import type { ProductRecord, WorkflowStatus } from "./types/product";
 import { useScoreWorker } from "./hooks/useScoreWorker";
+import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { ImportSection } from "./components/import/ImportSection";
 import { FilterSidebar } from "./components/discovery/FilterSidebar";
 import { ProductTable } from "./components/discovery/ProductTable";
@@ -39,10 +40,12 @@ export default function App() {
 
   const { lastMessage, setLastMessage, importFile, importSample } = useScoreWorker();
   const [sorting, setSorting] = useState<SortingState>([{ id: "score", desc: true }]);
+  const debouncedKeyword = useDebouncedValue(filters.keyword, 250);
+  const queryFilters = useMemo(() => ({ ...filters, keyword: debouncedKeyword }), [filters, debouncedKeyword]);
 
   const filteredRows = useLiveQuery(
-    () => queryProducts(filters),
-    [filters.market, filters.risk, filters.minScore, filters.maxScore, filters.keyword, filters.workflowStatus],
+    () => queryProducts(queryFilters),
+    [queryFilters.market, queryFilters.risk, queryFilters.minScore, queryFilters.maxScore, queryFilters.keyword, queryFilters.workflowStatus],
     [] as ProductRecord[]
   );
 
