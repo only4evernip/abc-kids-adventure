@@ -38,6 +38,9 @@ export function DetailDrawer({ row, open, onClose, onSave }: Props) {
 
   if (!open) return null;
 
+  const statusChanged = row ? row.workflowStatus !== row.rps.suggestedStatus : false;
+  const isManual = row?.workflowStatusSource === "manual";
+
   return (
     <aside style={panelStyle}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -56,15 +59,27 @@ export function DetailDrawer({ row, open, onClose, onSave }: Props) {
 
           <div style={{ marginBottom: 12 }}>
             <span style={badgeStyle("#eef6ff")}>RPS {row.rps.score.finalScore}</span>
-            <span style={badgeStyle("#f5f5f5")}>{row.workflowStatus}</span>
+            <span style={badgeStyle(isManual ? "#fff1f0" : "#f5f5f5")}>{row.workflowStatus}</span>
+            <span style={badgeStyle("#f6ffed", "#135200")}>系统建议 {row.rps.suggestedStatus}</span>
+            <span style={badgeStyle(isManual ? "#fff7e6" : "#f0f5ff", isManual ? "#ad6800" : "#1d39c4")}>{isManual ? "人工接管" : "系统跟随"}</span>
+            {statusChanged && <span style={badgeStyle("#fffbe6", "#ad6800")}>当前状态 ≠ 系统建议</span>}
             {row.overallRisk && <span style={badgeStyle("#fff3e6")}>风险 {row.overallRisk}</span>}
           </div>
 
           <div style={detailBlock}>
-            <strong>状态修改</strong>
+            <strong>状态控制</strong>
+            <div style={{ marginTop: 8, color: "#666", fontSize: 13, lineHeight: 1.6 }}>
+              <div>当前工作流状态：<strong style={{ color: "#111" }}>{row.workflowStatus}</strong></div>
+              <div>系统建议状态：<strong style={{ color: "#111" }}>{row.rps.suggestedStatus}</strong></div>
+              <div>状态来源：<strong style={{ color: "#111" }}>{isManual ? "人工接管" : "系统自动跟随"}</strong></div>
+              {row.workflowStatusUpdatedAt && <div>最近状态更新时间：<strong style={{ color: "#111" }}>{row.workflowStatusUpdatedAt}</strong></div>}
+            </div>
             <select value={status} onChange={(e) => setStatus(e.target.value as WorkflowStatus)} style={inputStyle}>
               {WORKFLOW_STATUS_OPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
             </select>
+            <div style={{ marginTop: 8, fontSize: 12, color: "#666" }}>
+              保存后会把该记录标记为“人工接管”，后续导入不会再覆盖当前状态。
+            </div>
           </div>
 
           <div style={detailBlock}>

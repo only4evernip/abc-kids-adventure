@@ -53,7 +53,23 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
         header: "RPS",
         cell: ({ getValue }) => <strong>{String(getValue())}</strong>,
       },
-      { accessorKey: "workflowStatus", header: "状态" },
+      {
+        accessorKey: "workflowStatus",
+        header: "状态",
+        cell: ({ row }) => {
+          const isManual = row.original.workflowStatusSource === "manual";
+          const statusChanged = row.original.workflowStatus !== row.original.rps.suggestedStatus;
+
+          return (
+            <div>
+              <div style={{ fontWeight: 600 }}>{row.original.workflowStatus}</div>
+              <div style={{ color: statusChanged ? "#ad6800" : "#666", fontSize: 12 }}>
+                {isManual ? "人工" : "系统"} · 建议 {row.original.rps.suggestedStatus}
+              </div>
+            </div>
+          );
+        },
+      },
       { id: "risk", accessorFn: (row) => row.overallRisk || "-", header: "风险" },
       {
         id: "tags",
