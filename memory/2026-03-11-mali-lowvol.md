@@ -92,6 +92,71 @@ assistant: [[reply_to_current]] 行，我先狠狠干 **麻利低波组合**。
 
 - Step 2：状态确认期（连续 N 天才跨档）+ EWMA 仓位平滑
 - Step 3：动态 ETF 优选 + 组合偏离度触发再平衡
+
+---
+
+## 2026-03-11 10:46 更新 - Step 2 完成
+
+根据 Gemini 深度审查反馈，完成了 **Step 2（状态确认期 + 仓位平滑）**：
+
+### 修改一：状态确认期
+
+**核心逻辑**：
+- 只有连续 2 天信号一致，才确认跨档
+- 单日信号闪烁不会触发调仓
+- 类似空调温控器的"迟滞效应"
+
+**新增函数**：`get_confirmed_environment()`
+
+**新增输出字段**：
+```json
+{
+  "state_machine": {
+    "confirmed_label": "试错",
+    "days_in_state": 5,
+    "pending_label": null,
+    "state_changed": false
+  }
+}
+```
+
+### 修改二：EWMA 仓位平滑
+
+**核心逻辑**：
+- 实际仓位 = 昨日仓位 × 70% + 目标仓位 × 30%
+- 单日单桶变动不超过 10%
+- 大切换（如 80% → 10%）分 3-5 天完成
+
+**新增函数**：`apply_ewma_smoothing()`
+
+**新增输出字段**：
+```json
+{
+  "smoothing": {
+    "applied": true,
+    "alpha": 0.3,
+    "max_daily_change": 10,
+    "daily_changes": {...}
+  }
+}
+```
+
+### 修改三：日报模板升级
+
+- 新增"状态机信息"区块
+- 新增"仓位平滑信息"区块
+- 环境档位显示持续天数
+
+### 文件变更
+
+- `Master/index_strategy.py` - 新增状态机 + EWMA 平滑
+- `Master/INDEX_STRATEGY_RULES.md` - 调仓规则更新
+
+### 下一步（Step 3）
+
+- 动态 ETF 优选（Smart Beta）
+- 组合偏离度触发再平衡（Tracking Error）
+- 最大回撤熔断机制
 user: Sender (untrusted metadata):
 ```json
 {

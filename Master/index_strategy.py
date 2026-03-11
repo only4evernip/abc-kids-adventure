@@ -189,51 +189,168 @@ def detect_environment(market: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-WEIGHT_MAP: Dict[str, Dict[str, float]] = {
-    "进攻": {
-        "total_equity_target": 80,
-        "true_defensive_weight": 20,
-        "equity_defensive_weight": 20,
-        "core_weight": 45,
-        "satellite_weight": 15,
-        "a_share_weight": 65,
-        "h_share_weight": 35,
-    },
-    "试错": {
-        "total_equity_target": 55,
-        "true_defensive_weight": 45,
-        "equity_defensive_weight": 25,
-        "core_weight": 25,
-        "satellite_weight": 5,
-        "a_share_weight": 70,
-        "h_share_weight": 30,
-    },
-    "混沌": {
-        "total_equity_target": 35,
-        "true_defensive_weight": 65,
-        "equity_defensive_weight": 20,
-        "core_weight": 15,
-        "satellite_weight": 0,
-        "a_share_weight": 75,
-        "h_share_weight": 25,
-    },
-    "防守": {
-        "total_equity_target": 10,
-        "true_defensive_weight": 90,
-        "equity_defensive_weight": 10,
-        "core_weight": 0,
-        "satellite_weight": 0,
-        "a_share_weight": 100,
-        "h_share_weight": 0,
-    },
-}
+def get_confirmed_environment(
+    current_label: str, 
+    previous: Dict[str, Any] | None
+) -> Dict[str, Any]:
+    """
+    状态确认期逻辑（2026-03-11 Step 2 新增）
+    
+    核心思路：
+    - 只有连续 N 天（默认 2 天）信号一致，才确认跨档
+    - 防止单日信号闪烁导致频繁调仓
+    
+    返回：
+    - confirmed_label: 确认后的环境档位
+    - days_in_state: 当前状态持续天数
+    - pending_label: 待确认的新档位（如果有）
+    - state_changed: 是否刚刚跨档
+    """
+    prev_state = (previous or {}).get("state_machine", {}) or {}
+    prev_label = prev_state.get("confirmed_label", "混沌")
+    prev_days = int(prev_state.get("days_in_state", 0) or 0)
+    prev_pending = prev_state.get("pending_label")
+    
+    # 如果当天信号和当前确认状态一致
+    if current_label == prev_label:
+        return {
+            "confirmed_label": prev_label,
+            "days_in_state": prev_days + 1,
+            "pending_label": None,
+            "state_changed": False,
+            "reasoning": f"环境档位延续：{prev_label}，已持续 {prev_days + 1} 天。",
+        }
+    
+    # 如果当天信号和当前状态不一致
+    # 检查是否有待确认的档位
+    if prev_pending == current_label:
+        # 已经是第二天收到相同的新信号，确认跨档
+        return {
+            "confirmed_label": current_label,
+            "days_in_state": 1,
+            "pending_label": None,
+            "state_changed": True,
+            "reasoning": f"环境跨档确认：{prev_label} → {current_label}（连续 2 天信号一致）。",
+        }
+    else:
+        # 第一天收到新信号，进入待确认状态
+        # 当前仍维持原档位，但记录待确认信号
+        return {
+            "confirmed_label": prev_label,
+            "days_in_state": prev_days,
+            "pending_label": current_label,
+            "state_changed": False,
+            "reasoning": f"收到 {current_label} 信号，但需连续 {STATE_CONFIRM_DAYS} 天确认，当前仍维持 {prev_label}。",
+        }
+
+
+def apply_ewma_smoothing(
+    target_weights: Dict[str, float],
+    previous: Dict[str, Any] | None,
+    alpha: float = EWMA_ALPHA,
+    max_change: float = MAX_DAILY_CHANGE
+) -> Dict[str, Any]:
+    """
+    EWMA 仓位平滑（2026-03-11 Step 2 新增）
+    
+    核心思路：
+    - 实际仓位 = 昨日仓位 * (1-alpha) + 目标仓位 * alpha
+    - 单日单桶变动不超过 max_change
+    - 大切换分 3-5 天完成，避免断崖式调仓
+    
+    返回：
+    - smoothed_weights: 平滑后的实际权重
+    - target_weights: 目标权重（用于对比）
+    - daily_changes: 各桶今日变动
+    - smoothing_applied: 是否应用了平滑
+    """
+    prev_plan = (previous or {}).get("allocation_plan", {}) or {}
+    
+    if not prev_plan:
+        # 无历史数据，直接使用目标权重
+        return {
+            "smoothed_weights": target_weights.copy(),
+            "target_weights": target_weights.copy(),
+            "daily_changes": {},
+            "smoothing_applied": False,
+            "reasoning": "无历史仓位数据，直接使用目标权重。",
+        }
+    
+    weight_keys = [
+        "true_defensive_weight", "equity_defensive_weight", 
+        "core_weight", "satellite_weight",
+        "a_share_weight", "h_share_weight"
+    ]
+    
+    smoothed = {}
+    changes = {}
+    smoothing_needed = False
+    
+    for key in weight_keys:
+        target = float(target_weights.get(key, 0) or 0)
+        prev = float(prev_plan.get(key, 0) or 0)
+        
+        # EWMA 计算
+        ewma_value = prev * (1 - alpha) + target * alpha
+        
+        # 限制单日最大变动
+        delta = ewma_value - prev
+        if abs(delta) > max_change:
+            ewma_value = prev + (max_change if delta > 0 else -max_change)
+            smoothing_needed = True
+        elif abs(delta) > 0.1:  # 有变动但未超限
+            smoothing_needed = True
+        
+        smoothed[key] = round(ewma_value, 2)
+        changes[key] = {
+            "prev": round(prev, 2),
+            "target": round(target, 2),
+            "actual": round(ewma_value, 2),
+            "delta": round(ewma_value - prev, 2),
+        }
+    
+    return {
+        "smoothed_weights": smoothed,
+        "target_weights": target_weights.copy(),
+        "daily_changes": changes,
+        "smoothing_applied": smoothing_needed,
+        "reasoning": f"EWMA 平滑（α={alpha}），单日最大变动 {max_change}%。" if smoothing_needed else "目标与实际一致，无需平滑。",
+    }
+
+# 环境档位优先级（用于判断跨档方向）
+ENV_PRIORITY = {"进攻": 4, "试错": 3, "混沌": 2, "防守": 1}
+
+# 状态确认期配置
+STATE_CONFIRM_DAYS = 2  # 连续 2 天才跨档
+
+# EWMA 平滑配置
+EWMA_ALPHA = 0.3  # 新权重占比 30%，旧权重占比 70%
+MAX_DAILY_CHANGE = 10  # 单日单桶最大变动 10%
 
 
 def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, Any] | None = None) -> Dict[str, Any]:
     market = input_data.get("market_snapshot", {}) or {}
-    env = detect_environment(market)
-    label = env["label"]
-    weights = WEIGHT_MAP[label].copy()
+    raw_env = detect_environment(market)
+    raw_label = raw_env["label"]
+    
+    # === Step 2 新增：状态确认期 ===
+    state_result = get_confirmed_environment(raw_label, previous)
+    confirmed_label = state_result["confirmed_label"]
+    
+    # 使用确认后的档位获取权重
+    target_weights = WEIGHT_MAP[confirmed_label].copy()
+    
+    # === Step 2 新增：EWMA 仓位平滑 ===
+    smooth_result = apply_ewma_smoothing(target_weights, previous)
+    actual_weights = smooth_result["smoothed_weights"]
+    
+    # 重新计算 total_equity_target（平滑后）
+    actual_weights["total_equity_target"] = round(
+        actual_weights.get("equity_defensive_weight", 0) +
+        actual_weights.get("core_weight", 0) +
+        actual_weights.get("satellite_weight", 0),
+        2
+    )
 
     fund_pool_focus = [
         "真防守池：货币基金 / 短债基金 / 政金债指数基金 / 同业存单指数基金 / 美元债 QDII",
@@ -253,6 +370,12 @@ def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, 
     if not market.get("ma60_above_ratio"):
         risk_flags.append("缺少MA60以上个股占比数据，环境判断可能不够精准")
     
+    # 状态机相关提示
+    if state_result.get("pending_label"):
+        risk_flags.append(f"收到 {state_result['pending_label']} 信号，待连续确认后再跨档")
+    if state_result.get("state_changed"):
+        risk_flags.append(f"环境已跨档：{state_result.get('reasoning', '')}")
+    
     # 情绪过热/过冷提示（不作为主判断，但需要警惕）
     if float(market.get("blowup_rate") or 0) >= 0.4:
         risk_flags.append("炸板率偏高，题材情绪可能过热，追高需谨慎")
@@ -269,20 +392,33 @@ def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, 
     ]
 
     allocation_summary = (
-        f"当前按{label}档处理：总权益 {weights['total_equity_target']}%，"
-        f"真防守 {weights['true_defensive_weight']}%，"
-        f"核心仓 {weights['core_weight']}%，卫星仓 {weights['satellite_weight']}%。"
+        f"当前按{confirmed_label}档处理：总权益 {actual_weights['total_equity_target']}%，"
+        f"真防守 {actual_weights['true_defensive_weight']}%，"
+        f"核心仓 {actual_weights['core_weight']}%，卫星仓 {actual_weights['satellite_weight']}%。"
     )
 
     current_plan = {
-        **weights,
+        **actual_weights,
         "allocation_summary": allocation_summary,
     }
     rebalance_plan = build_rebalance_plan(current_plan, previous)
 
     return {
-        "environment_label": label,
-        "environment_reasoning": env["reasoning"],
+        "environment_label": confirmed_label,
+        "environment_reasoning": raw_env["reasoning"],
+        "raw_environment_label": raw_label,  # 原始信号（可能和确认后的不同）
+        "state_machine": {
+            "confirmed_label": confirmed_label,
+            "days_in_state": state_result["days_in_state"],
+            "pending_label": state_result.get("pending_label"),
+            "state_changed": state_result.get("state_changed", False),
+        },
+        "smoothing": {
+            "applied": smooth_result["smoothing_applied"],
+            "alpha": EWMA_ALPHA,
+            "max_daily_change": MAX_DAILY_CHANGE,
+            "daily_changes": smooth_result["daily_changes"],
+        },
         "allocation_plan": current_plan,
         "rebalance_plan": rebalance_plan,
         "risk_flags": risk_flags,
@@ -296,16 +432,29 @@ def build_index_review_stub(result: Dict[str, Any], day_label: str = "Day X", tr
     rebalance = result["rebalance_plan"]
     risk_flags = result.get("risk_flags", [])
     watch_points = result.get("watch_points", [])
+    state_machine = result.get("state_machine", {})
+    smoothing = result.get("smoothing", {})
 
     lines = [
         f"# 指数策略 {day_label} 复盘记录｜{trade_date or 'YYYY-MM-DD'}",
         "",
         "## 今日固定 5 句",
-        f"1. **环境档位：** 待复盘（系统输出：{result['environment_label']}）",
+        f"1. **环境档位：** 待复盘（系统输出：{result['environment_label']}，持续 {state_machine.get('days_in_state', 1)} 天）",
         f"2. **总权益目标：** 待复盘（系统输出：{allocation['total_equity_target']}%）",
         f"3. **今日调仓动作：** 待复盘（系统输出：{rebalance['rebalance_action']}）",
         f"4. **今天最大风险：** 待复盘（系统输出：{risk_flags[0] if risk_flags else ''}）",
         f"5. **明天最该盯的点：** 待复盘（系统输出：{watch_points[0] if watch_points else ''}）",
+        "",
+        "## 状态机信息",
+        f"- **确认档位：** {state_machine.get('confirmed_label', result['environment_label'])}",
+        f"- **持续天数：** {state_machine.get('days_in_state', 1)} 天",
+        f"- **待确认信号：** {state_machine.get('pending_label') or '无'}",
+        f"- **今日跨档：** {'是' if state_machine.get('state_changed') else '否'}",
+        "",
+        "## 仓位平滑信息",
+        f"- **是否应用平滑：** {'是' if smoothing.get('applied') else '否'}",
+        f"- **平滑系数 α：** {smoothing.get('alpha', 0.3)}",
+        f"- **单日最大变动：** {smoothing.get('max_daily_change', 10)}%",
         "",
         "## 组合层复盘",
         "- **环境判断是否准确：** 准确 / 一般 / 偏差较大",
@@ -342,18 +491,26 @@ def render_index_strategy_report(result: Dict[str, Any]) -> str:
     risk_flags = result.get("risk_flags", [])
     watch_points = result.get("watch_points", [])
     fund_pool_focus = result.get("fund_pool_focus", [])
+    state_machine = result.get("state_machine", {})
+    smoothing = result.get("smoothing", {})
 
     lines = [
         "# 指数策略日报",
         "",
         "## 当日结论",
-        f"1. **环境档位：** {result['environment_label']}",
+        f"1. **环境档位：** {result['environment_label']}（持续 {state_machine.get('days_in_state', 1)} 天）",
         f"2. **总权益目标：** {allocation['total_equity_target']}%",
         f"3. **今日是否调仓：** {'是' if rebalance['needs_rebalance'] else '否'}",
         f"4. **最重要风险：** {risk_flags[0] if risk_flags else '暂无'}",
         f"5. **明天最该盯的点：** {watch_points[0] if watch_points else '暂无'}",
         "",
-        "## 配置建议",
+        "## 状态机状态",
+        f"- **确认档位：** {state_machine.get('confirmed_label', result['environment_label'])}",
+        f"- **持续天数：** {state_machine.get('days_in_state', 1)} 天",
+        f"- **待确认信号：** {state_machine.get('pending_label') or '无'}",
+        f"- **今日跨档：** {'是 ✅' if state_machine.get('state_changed') else '否'}",
+        "",
+        "## 配置建议（平滑后）",
         f"- **真防守：** {allocation['true_defensive_weight']}%",
         f"- **权益防守：** {allocation['equity_defensive_weight']}%",
         f"- **核心仓：** {allocation['core_weight']}%",
@@ -361,12 +518,29 @@ def render_index_strategy_report(result: Dict[str, Any]) -> str:
         f"- **A股 / H股：** {allocation['a_share_weight']}% / {allocation['h_share_weight']}%",
         f"- **一句话总结：** {allocation['allocation_summary']}",
         "",
+        "## 仓位平滑说明",
+    ]
+    
+    if smoothing.get("applied"):
+        lines.append(f"- **平滑系数 α：** {smoothing.get('alpha', 0.3)}（目标权重占 30%）")
+        lines.append(f"- **单日最大变动：** {smoothing.get('max_daily_change', 10)}%")
+        daily_changes = smoothing.get("daily_changes", {})
+        if daily_changes:
+            lines.append("- **各桶变动：**")
+            for key, change in daily_changes.items():
+                if abs(change.get("delta", 0)) > 0.1:
+                    lines.append(f"  - {key}: {change['prev']}% → {change['actual']}%（目标 {change['target']}%）")
+    else:
+        lines.append("- 今日无需平滑，目标与实际一致")
+    
+    lines.extend([
+        "",
         "## 调仓建议",
         f"- **动作：** {rebalance['rebalance_action']}",
         f"- **理由：** {rebalance['rebalance_reasoning']}",
         "",
         "## 风险提示",
-    ]
+    ])
     lines.extend([f"- {x}" for x in risk_flags] or ["- 暂无"])
     lines.append("")
     lines.append("## 观察点")
