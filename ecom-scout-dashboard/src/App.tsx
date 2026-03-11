@@ -120,7 +120,18 @@ export default function App() {
   };
 
   return (
-    <main style={{ fontFamily: "Inter, system-ui, sans-serif", padding: 24, maxWidth: 1440, margin: "0 auto" }}>
+    <main
+      style={{
+        fontFamily: "Inter, system-ui, sans-serif",
+        padding: 24,
+        maxWidth: 1440,
+        margin: "0 auto",
+        minHeight: "100vh",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
       <h1 style={{ marginBottom: 12 }}>选品侦察台 v1（发现矩阵首屏）</h1>
       <p style={{ color: "#555", lineHeight: 1.7 }}>
         这版已经不是纯导入页了。现在能做：CSV 导入、Worker 打分、Dexie 入库、发现矩阵筛选、表格排序、虚拟滚动，以及右侧详情修改。
@@ -154,7 +165,17 @@ export default function App() {
         totalCount={totalCount}
       />
 
-      <section style={{ display: "grid", gridTemplateColumns: detailDrawerOpen ? "280px 1fr 360px" : "280px 1fr", gap: 16, marginTop: 24 }}>
+      <section
+        style={{
+          display: "grid",
+          gridTemplateColumns: detailDrawerOpen ? "280px minmax(0, 1fr) 360px" : "280px minmax(0, 1fr)",
+          gap: 16,
+          marginTop: 24,
+          flex: 1,
+          minHeight: 0,
+          alignItems: "stretch",
+        }}
+      >
         <FilterSidebar
           filters={filters}
           marketOptions={marketOptions}

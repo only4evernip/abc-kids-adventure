@@ -117,7 +117,7 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
         </div>
       </div>
 
-      <div style={{ border: "1px solid #eee", borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ border: "1px solid #eee", borderRadius: 12, overflow: "hidden", display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
         <div style={{ display: "grid", gridTemplateColumns: GRID_TEMPLATE, background: "#f7f7f7", borderBottom: "1px solid #eee" }}>
           {table.getHeaderGroups().map((headerGroup) =>
             headerGroup.headers.map((header) => (
@@ -134,7 +134,7 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
         {tableRows.length === 0 ? (
           <div style={{ padding: 16, color: "#666" }}>没有符合条件的数据。</div>
         ) : (
-          <div ref={parentRef} style={{ height: 560, overflow: "auto", position: "relative" }}>
+          <div ref={parentRef} style={{ flex: 1, minHeight: 0, overflow: "auto", position: "relative" }}>
             <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
               {virtualRows.map((virtualRow) => {
                 const row = tableRows[virtualRow.index];
@@ -175,7 +175,10 @@ const panelStyle: CSSProperties = {
   borderRadius: 12,
   padding: 16,
   background: "#fff",
-  minHeight: 200,
+  minHeight: 0,
+  height: "100%",
+  display: "flex",
+  flexDirection: "column",
 };
 
 const th: CSSProperties = {

@@ -154,7 +154,11 @@ const panelStyle: CSSProperties = {
   borderRadius: 12,
   padding: 16,
   background: "#fff",
-  minHeight: 200,
+  minHeight: 0,
+  height: "100%",
+  boxSizing: "border-box",
+  overflow: "auto",
+  alignSelf: "stretch",
 };
 
 const smallButton: CSSProperties = {
