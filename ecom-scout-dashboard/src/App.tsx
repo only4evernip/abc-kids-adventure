@@ -77,7 +77,14 @@ export default function App() {
 
   const handleClear = async () => {
     await db.products.clear();
-    setImportMeta({ currentBatchId: undefined, importedAt: undefined, rowCount: 0, errorCount: 0, errorItems: [] });
+    setImportMeta({
+      currentBatchId: undefined,
+      importedAt: undefined,
+      rowCount: 0,
+      errorCount: 0,
+      errorItems: [],
+      stats: { insertedCount: 0, updatedCount: 0, preservedManualStatusCount: 0, preservedNotesCount: 0 },
+    });
     setImportProgress(0);
     selectProduct(undefined);
     setDetailDrawerOpen(false);
@@ -96,7 +103,14 @@ export default function App() {
     const text = await file.text();
     const payload = JSON.parse(text);
     const count = await importSessionPayload(payload);
-    setImportMeta({ currentBatchId: "session-import", importedAt: new Date().toISOString(), rowCount: count, errorCount: 0, errorItems: [] });
+    setImportMeta({
+      currentBatchId: "session-import",
+      importedAt: new Date().toISOString(),
+      rowCount: count,
+      errorCount: 0,
+      errorItems: [],
+      stats: { insertedCount: count, updatedCount: 0, preservedManualStatusCount: 0, preservedNotesCount: 0 },
+    });
     setLastMessage(`已导入 Session：${count} 条记录`);
   };
 
@@ -121,6 +135,7 @@ export default function App() {
         errorCount={importMeta.errorCount}
         lastMessage={lastMessage}
         errorItems={importMeta.errorItems}
+        stats={importMeta.stats}
         onImportFile={(file) => {
           if (file) void importFile(file);
         }}

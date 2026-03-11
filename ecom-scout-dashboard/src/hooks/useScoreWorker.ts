@@ -37,6 +37,7 @@ export function useScoreWorker() {
           rowCount: data.count,
           errorCount: data.errorCount,
           errorItems: data.errorItems,
+          stats: data.stats,
         });
         setLastMessage(`导入完成：成功 ${data.count} 条，失败 ${data.errorCount} 条`);
         return;
@@ -58,7 +59,14 @@ export function useScoreWorker() {
     const id = batchId();
     setImportRunning(true);
     setImportProgress(0);
-    setImportMeta({ currentBatchId: id, importedAt: new Date().toISOString(), rowCount: 0, errorCount: 0, errorItems: [] });
+    setImportMeta({
+      currentBatchId: id,
+      importedAt: new Date().toISOString(),
+      rowCount: 0,
+      errorCount: 0,
+      errorItems: [],
+      stats: { insertedCount: 0, updatedCount: 0, preservedManualStatusCount: 0, preservedNotesCount: 0 },
+    });
     setLastMessage(`开始导入：${label || file.name}`);
     workerRef.current?.postMessage({ batchId: id, file });
   };

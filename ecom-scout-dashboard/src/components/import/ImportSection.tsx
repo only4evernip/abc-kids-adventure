@@ -10,6 +10,12 @@ interface Props {
   errorCount: number;
   lastMessage: string;
   errorItems: ImportErrorItem[];
+  stats: {
+    insertedCount: number;
+    updatedCount: number;
+    preservedManualStatusCount: number;
+    preservedNotesCount: number;
+  };
   onImportFile: (file?: File | null) => void;
   onImportSample: () => void;
   onImportSessionFile: (file?: File | null) => void;
@@ -28,6 +34,7 @@ export function ImportSection(props: Props) {
     errorCount,
     lastMessage,
     errorItems,
+    stats,
     onImportFile,
     onImportSample,
     onImportSessionFile,
@@ -64,6 +71,10 @@ export function ImportSection(props: Props) {
         <div><strong>最近导入：</strong>{importedAt || "-"}</div>
         <div><strong>本轮成功：</strong>{rowCount}</div>
         <div><strong>本轮失败：</strong>{errorCount}</div>
+        <div><strong>新增记录：</strong>{stats.insertedCount}</div>
+        <div><strong>更新记录：</strong>{stats.updatedCount}</div>
+        <div><strong>保留人工状态：</strong>{stats.preservedManualStatusCount}</div>
+        <div><strong>保留备注：</strong>{stats.preservedNotesCount}</div>
         <div><strong>本地记录数：</strong>{totalCount}</div>
 
         {errorCount > 0 && (

@@ -16,12 +16,20 @@ export interface ImportErrorItem {
   valuePreview?: string;
 }
 
+interface ImportStats {
+  insertedCount: number;
+  updatedCount: number;
+  preservedManualStatusCount: number;
+  preservedNotesCount: number;
+}
+
 interface ImportMeta {
   importedAt?: string;
   rowCount: number;
   errorCount: number;
   currentBatchId?: string;
   errorItems: ImportErrorItem[];
+  stats: ImportStats;
 }
 
 interface ScoutState {
@@ -52,6 +60,12 @@ export const useScoutStore = create<ScoutState>((set) => ({
     currentBatchId: undefined,
     importedAt: undefined,
     errorItems: [],
+    stats: {
+      insertedCount: 0,
+      updatedCount: 0,
+      preservedManualStatusCount: 0,
+      preservedNotesCount: 0,
+    },
   },
   setFilters: (patch) => set((state) => ({ filters: { ...state.filters, ...patch } })),
   resetFilters: () => set(() => ({ filters: {} })),

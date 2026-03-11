@@ -16,6 +16,13 @@ export interface ImportErrorItem {
   valuePreview?: string;
 }
 
+export interface ImportStats {
+  insertedCount: number;
+  updatedCount: number;
+  preservedManualStatusCount: number;
+  preservedNotesCount: number;
+}
+
 export type ScoreWorkerOutput =
   | {
       type: "progress";
@@ -31,6 +38,7 @@ export type ScoreWorkerOutput =
       count: number;
       errorCount: number;
       errorItems: ImportErrorItem[];
+      stats: ImportStats;
     }
   | {
       type: "error";
@@ -88,31 +96,71 @@ function buildRecord(row: ProductRow, batchId: string): ProductRecord {
   };
 }
 
-function mergeImportedRecord(existing: ProductRecord | undefined, incoming: ProductRecord): ProductRecord {
-  if (!existing) return incoming;
+function mergeImportedRecord(existing: ProductRecord | undefined, incoming: ProductRecord): { record: ProductRecord; stats: ImportStats } {
+  if (!existing) {
+    return {
+      record: incoming,
+      stats: {
+        insertedCount: 1,
+        updatedCount: 0,
+        preservedManualStatusCount: 0,
+        preservedNotesCount: 0,
+      },
+    };
+  }
 
   const manualStatusLocked = existing.workflowStatusSource === "manual";
+  const preservedNotes = Boolean(existing.notes?.trim());
   const workflowStatus: WorkflowStatus = manualStatusLocked ? existing.workflowStatus : incoming.rps.suggestedStatus;
 
   return {
-    ...existing,
-    ...incoming,
-    notes: existing.notes ?? "",
-    workflowStatus,
-    workflowStatusSource: manualStatusLocked ? "manual" : "system",
-    workflowStatusUpdatedAt: manualStatusLocked
-      ? existing.workflowStatusUpdatedAt ?? existing.importedAt
-      : incoming.importedAt,
+    record: {
+      ...existing,
+      ...incoming,
+      notes: existing.notes ?? "",
+      workflowStatus,
+      workflowStatusSource: manualStatusLocked ? "manual" : "system",
+      workflowStatusUpdatedAt: manualStatusLocked
+        ? existing.workflowStatusUpdatedAt ?? existing.importedAt
+        : incoming.importedAt,
+    },
+    stats: {
+      insertedCount: 0,
+      updatedCount: 1,
+      preservedManualStatusCount: manualStatusLocked ? 1 : 0,
+      preservedNotesCount: preservedNotes ? 1 : 0,
+    },
+  };
+}
+
+function emptyImportStats(): ImportStats {
+  return {
+    insertedCount: 0,
+    updatedCount: 0,
+    preservedManualStatusCount: 0,
+    preservedNotesCount: 0,
+  };
+}
+
+function mergeStats(base: ImportStats, next: ImportStats): ImportStats {
+  return {
+    insertedCount: base.insertedCount + next.insertedCount,
+    updatedCount: base.updatedCount + next.updatedCount,
+    preservedManualStatusCount: base.preservedManualStatusCount + next.preservedManualStatusCount,
+    preservedNotesCount: base.preservedNotesCount + next.preservedNotesCount,
   };
 }
 
 async function bulkSave(records: ProductRecord[]) {
-  if (records.length === 0) return;
+  if (records.length === 0) return emptyImportStats();
 
   const existingRecords = await db.products.bulkGet(records.map((record) => record.id));
-  const mergedRecords = records.map((record, index) => mergeImportedRecord(existingRecords[index] ?? undefined, record));
+  const mergeResults = records.map((record, index) => mergeImportedRecord(existingRecords[index] ?? undefined, record));
+  const mergedRecords = mergeResults.map((item) => item.record);
+  const stats = mergeResults.reduce((acc, item) => mergeStats(acc, item.stats), emptyImportStats());
 
   await db.products.bulkPut(mergedRecords);
+  return stats;
 }
 
 function summarizeParseError(rowNumber: number, raw: Record<string, unknown>, issues: { path: (string | number)[]; message: string }[]): ImportErrorItem {
@@ -154,6 +202,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
     const total = rows.length;
     let errorCount = 0;
     let saved = 0;
+    let stats = emptyImportStats();
     const buffer: ProductRecord[] = [];
     const errorItems: ImportErrorItem[] = [];
 
@@ -172,7 +221,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
       }
 
       if (buffer.length >= 500) {
-        await bulkSave(buffer.splice(0, buffer.length));
+        stats = mergeStats(stats, await bulkSave(buffer.splice(0, buffer.length)));
         saved = index + 1 - errorCount;
       }
 
@@ -189,7 +238,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
     }
 
     if (buffer.length > 0) {
-      await bulkSave(buffer.splice(0, buffer.length));
+      stats = mergeStats(stats, await bulkSave(buffer.splice(0, buffer.length)));
       saved = total - errorCount;
     }
 
@@ -199,6 +248,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
       count: saved,
       errorCount,
       errorItems,
+      stats,
     } satisfies ScoreWorkerOutput);
   } catch (error) {
     self.postMessage({
