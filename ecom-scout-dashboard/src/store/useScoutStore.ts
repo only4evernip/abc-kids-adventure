@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-interface FilterState {
+export interface FilterState {
   market?: string;
   risk?: string;
   minScore?: number;

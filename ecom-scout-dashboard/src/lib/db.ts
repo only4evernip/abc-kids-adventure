@@ -6,9 +6,9 @@ export class ScoutDatabase extends Dexie {
 
   constructor() {
     super("ecom-scout-dashboard");
-    this.version(2).stores({
+    this.version(3).stores({
       products:
-        "id, importBatchId, workflowStatus, market, keyword, productDirection, importedAt, rps.score.finalScore, [workflowStatus+rps.score.finalScore], [market+workflowStatus]",
+        "id, importBatchId, workflowStatus, market, overallRisk, keyword, productDirection, importedAt, rps.score.finalScore, [workflowStatus+rps.score.finalScore], [market+workflowStatus]",
     });
   }
 }

@@ -6,7 +6,7 @@ import type { ProductRecord, ProductRow } from "../types/product";
 
 export interface ScoreWorkerInput {
   batchId: string;
-  csvText: string;
+  file: File;
 }
 
 export type ScoreWorkerOutput =
@@ -65,27 +65,29 @@ async function bulkSave(records: ProductRecord[]) {
   await db.products.bulkPut(records);
 }
 
-self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
-  const { csvText, batchId } = event.data;
-
-  try {
-    const parsed = Papa.parse<Record<string, unknown>>(csvText, {
+function parseCsvFile(file: File): Promise<Record<string, unknown>[]> {
+  return new Promise((resolve, reject) => {
+    Papa.parse<Record<string, unknown>>(file, {
       header: true,
       skipEmptyLines: true,
       transformHeader: (header) => header.trim(),
+      complete: (results) => {
+        if (results.errors.length > 0) {
+          reject(new Error(results.errors[0].message));
+          return;
+        }
+        resolve(results.data || []);
+      },
+      error: (error) => reject(error),
     });
+  });
+}
 
-    if (parsed.errors.length > 0) {
-      const fatal = parsed.errors[0];
-      self.postMessage({
-        type: "error",
-        batchId,
-        message: fatal.message,
-      } satisfies ScoreWorkerOutput);
-      return;
-    }
+self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
+  const { file, batchId } = event.data;
 
-    const rows = parsed.data || [];
+  try {
+    const rows = await parseCsvFile(file);
     const total = rows.length;
     let errorCount = 0;
     let saved = 0;
