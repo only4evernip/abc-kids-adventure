@@ -1,28 +1,57 @@
+import Papa from "papaparse";
 import { calculateRps } from "../domain/rps";
 import { db } from "../lib/db";
+import { csvRowSchema, toProductRow } from "../lib/csvSchema";
 import type { ProductRecord, ProductRow } from "../types/product";
 
 export interface ScoreWorkerInput {
   batchId: string;
-  rows: ProductRow[];
+  csvText: string;
 }
 
-export interface ScoreWorkerOutput {
-  status: "done" | "error";
-  batchId: string;
-  count: number;
-  errorCount: number;
-  message?: string;
+export type ScoreWorkerOutput =
+  | {
+      type: "progress";
+      batchId: string;
+      processed: number;
+      total: number;
+      saved: number;
+      errors: number;
+    }
+  | {
+      type: "done";
+      batchId: string;
+      count: number;
+      errorCount: number;
+    }
+  | {
+      type: "error";
+      batchId: string;
+      message: string;
+    };
+
+function hashString(input: string) {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 33) ^ input.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function stableProductId(row: ProductRow) {
+  const base = [row.market, row.platformSite, row.asin || row.keyword, row.productDirection]
+    .map((v) => (v || "").trim().toLowerCase())
+    .join("|");
+  return `prd_${hashString(base)}`;
 }
 
 function buildRecord(row: ProductRow, batchId: string): ProductRecord {
   const importedAt = new Date().toISOString();
   const rps = calculateRps(row);
-  const id = `${batchId}:${row.asin || row.keyword}:${row.productDirection}`;
 
   return {
     ...row,
-    id,
+    id: stableProductId(row),
     importBatchId: batchId,
     importedAt,
     workflowStatus: rps.suggestedStatus,
@@ -31,29 +60,81 @@ function buildRecord(row: ProductRow, batchId: string): ProductRecord {
   };
 }
 
+async function bulkSave(records: ProductRecord[]) {
+  if (records.length === 0) return;
+  await db.products.bulkPut(records);
+}
+
 self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
-  const { rows = [], batchId } = event.data;
+  const { csvText, batchId } = event.data;
 
   try {
-    const records = rows.map((row) => buildRecord(row, batchId));
-    await db.products.bulkPut(records);
+    const parsed = Papa.parse<Record<string, unknown>>(csvText, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.trim(),
+    });
 
-    const payload: ScoreWorkerOutput = {
-      status: "done",
+    if (parsed.errors.length > 0) {
+      const fatal = parsed.errors[0];
+      self.postMessage({
+        type: "error",
+        batchId,
+        message: fatal.message,
+      } satisfies ScoreWorkerOutput);
+      return;
+    }
+
+    const rows = parsed.data || [];
+    const total = rows.length;
+    let errorCount = 0;
+    let saved = 0;
+    const buffer: ProductRecord[] = [];
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const raw = rows[index];
+      const result = csvRowSchema.safeParse(raw);
+
+      if (!result.success) {
+        errorCount += 1;
+      } else {
+        const normalized = toProductRow(result.data);
+        buffer.push(buildRecord(normalized, batchId));
+      }
+
+      if (buffer.length >= 500) {
+        await bulkSave(buffer.splice(0, buffer.length));
+        saved = index + 1 - errorCount;
+      }
+
+      if ((index + 1) % 500 === 0 || index === rows.length - 1) {
+        self.postMessage({
+          type: "progress",
+          batchId,
+          processed: index + 1,
+          total,
+          saved,
+          errors: errorCount,
+        } satisfies ScoreWorkerOutput);
+      }
+    }
+
+    if (buffer.length > 0) {
+      await bulkSave(buffer.splice(0, buffer.length));
+      saved = total - errorCount;
+    }
+
+    self.postMessage({
+      type: "done",
       batchId,
-      count: records.length,
-      errorCount: 0,
-    };
-
-    self.postMessage(payload);
+      count: saved,
+      errorCount,
+    } satisfies ScoreWorkerOutput);
   } catch (error) {
-    const payload: ScoreWorkerOutput = {
-      status: "error",
+    self.postMessage({
+      type: "error",
       batchId,
-      count: 0,
-      errorCount: rows.length,
       message: error instanceof Error ? error.message : "unknown worker error",
-    };
-    self.postMessage(payload);
+    } satisfies ScoreWorkerOutput);
   }
 };

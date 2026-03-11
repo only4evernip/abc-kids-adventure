@@ -5,6 +5,7 @@ export const CSV_FIELD_MAP = {
   关键词: "keyword",
   细分方向: "nicheDirection",
   产品方向: "productDirection",
+  大类目: "bigCategory",
   ASIN: "asin",
   产品标题: "title",
   品牌: "brand",
@@ -40,6 +41,7 @@ export const REQUIRED_COLUMNS = [
 ] as const;
 
 export const RECOMMENDED_COLUMNS = [
+  "大类目",
   "当前价格",
   "当前BSR",
   "核心卖点",
