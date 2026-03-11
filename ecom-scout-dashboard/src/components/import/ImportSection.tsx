@@ -42,6 +42,51 @@ function phaseLabel(phase: ImportPhase) {
   }
 }
 
+const STEPPER_PHASES: { key: Exclude<ImportPhase, "idle" | "failed">; label: string }[] = [
+  { key: "parsing", label: "解析" },
+  { key: "validating", label: "校验" },
+  { key: "saving", label: "落库" },
+  { key: "done", label: "完成" },
+];
+
+function getPhaseStepState(step: Exclude<ImportPhase, "idle" | "failed">, phase: ImportPhase) {
+  if (phase === "failed") return "pending" as const;
+  const activeIndex = STEPPER_PHASES.findIndex((item) => item.key === phase);
+  const stepIndex = STEPPER_PHASES.findIndex((item) => item.key === step);
+
+  if (phase === "idle") return "pending" as const;
+  if (stepIndex < activeIndex) return "done" as const;
+  if (stepIndex === activeIndex) return "active" as const;
+  return "pending" as const;
+}
+
+function stepBadgeStyle(state: "done" | "active" | "pending"): CSSProperties {
+  if (state === "done") {
+    return {
+      ...stepCircleBase,
+      background: "#f6ffed",
+      border: "1px solid #b7eb8f",
+      color: "#389e0d",
+    };
+  }
+
+  if (state === "active") {
+    return {
+      ...stepCircleBase,
+      background: "#e6f4ff",
+      border: "1px solid #91caff",
+      color: "#0958d9",
+    };
+  }
+
+  return {
+    ...stepCircleBase,
+    background: "#fafafa",
+    border: "1px solid #d9d9d9",
+    color: "#999",
+  };
+}
+
 export function ImportSection(props: Props) {
   const {
     importRunning,
@@ -83,8 +128,41 @@ export function ImportSection(props: Props) {
       </section>
 
       <section style={{ marginTop: 20, padding: 16, border: "1px solid #eee", borderRadius: 12, background: "#fafafa" }}>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, marginBottom: 10 }}>导入阶段</div>
+          <div style={stepperRow}>
+            {STEPPER_PHASES.map((item, index) => {
+              const state = getPhaseStepState(item.key, phase);
+              const isFailed = phase === "failed";
+
+              return (
+                <div key={item.key} style={stepItem}>
+                  <div style={stepTopRow}>
+                    <div style={isFailed ? failedStepStyle : stepBadgeStyle(state)}>
+                      {isFailed ? "!" : state === "done" ? "✓" : index + 1}
+                    </div>
+                    {index < STEPPER_PHASES.length - 1 && (
+                      <div
+                        style={{
+                          ...stepLine,
+                          background: state === "done" ? "#b7eb8f" : "#e5e7eb",
+                        }}
+                      />
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: isFailed ? "#cf1322" : state === "active" ? "#0958d9" : "#666", marginTop: 8 }}>
+                    {item.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 10, fontSize: 13, color: phase === "failed" ? "#cf1322" : "#555" }}>
+            当前阶段：<strong>{phaseLabel(phase)}</strong>
+          </div>
+        </div>
+
         <div><strong>状态：</strong>{importRunning ? "导入中" : phaseLabel(phase)}</div>
-        <div><strong>当前阶段：</strong>{phaseLabel(phase)}</div>
         <div><strong>进度：</strong>{importProgress}%</div>
         <div><strong>最近消息：</strong>{lastMessage}</div>
         <div><strong>当前批次：</strong>{currentBatchId || "-"}</div>
@@ -145,4 +223,47 @@ const actionButton: CSSProperties = {
   padding: "10px 14px",
   borderRadius: 10,
   cursor: "pointer",
+};
+
+const stepperRow: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: 8,
+  alignItems: "start",
+};
+
+const stepItem: CSSProperties = {
+  minWidth: 0,
+};
+
+const stepTopRow: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+};
+
+const stepCircleBase: CSSProperties = {
+  width: 28,
+  height: 28,
+  borderRadius: 999,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 12,
+  fontWeight: 700,
+  flexShrink: 0,
+};
+
+const failedStepStyle: CSSProperties = {
+  ...stepCircleBase,
+  background: "#fff1f0",
+  border: "1px solid #ffa39e",
+  color: "#cf1322",
+};
+
+const stepLine: CSSProperties = {
+  height: 2,
+  flex: 1,
+  marginLeft: 8,
+  marginRight: 4,
+  borderRadius: 999,
 };
