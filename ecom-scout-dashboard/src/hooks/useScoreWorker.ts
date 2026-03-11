@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useScoutStore } from "../store/useScoutStore";
+import { useScoutStore, type ImportPhase } from "../store/useScoutStore";
 import type { ScoreWorkerOutput } from "../workers/score.worker";
 
 function batchId() {
@@ -14,12 +14,20 @@ export function useScoreWorker() {
   const setImportProgress = useScoutStore((s) => s.setImportProgress);
   const setImportMeta = useScoutStore((s) => s.setImportMeta);
 
+  const setPhase = (phase: ImportPhase) => setImportMeta({ phase });
+
   useEffect(() => {
     const worker = new Worker(new URL("../workers/score.worker.ts", import.meta.url), { type: "module" });
     workerRef.current = worker;
 
     worker.onmessage = (event: MessageEvent<ScoreWorkerOutput>) => {
       const data = event.data;
+
+      if (data.type === "phase") {
+        setPhase(data.phase);
+        setLastMessage(data.message);
+        return;
+      }
 
       if (data.type === "progress") {
         const progress = data.total > 0 ? Math.round((data.processed / data.total) * 100) : 0;
@@ -36,6 +44,7 @@ export function useScoreWorker() {
           importedAt: new Date().toISOString(),
           rowCount: data.count,
           errorCount: data.errorCount,
+          phase: "done",
           errorItems: data.errorItems,
           stats: data.stats,
         });
@@ -45,6 +54,7 @@ export function useScoreWorker() {
 
       if (data.type === "error") {
         setImportRunning(false);
+        setPhase("failed");
         setLastMessage(`导入失败：${data.message}`);
       }
     };
@@ -62,6 +72,7 @@ export function useScoreWorker() {
     setImportMeta({
       currentBatchId: id,
       importedAt: new Date().toISOString(),
+      phase: "parsing",
       rowCount: 0,
       errorCount: 0,
       errorItems: [],

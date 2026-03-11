@@ -9,6 +9,8 @@ export interface FilterState {
   workflowStatus?: string;
 }
 
+export type ImportPhase = "idle" | "parsing" | "validating" | "saving" | "done" | "failed";
+
 export interface ImportErrorItem {
   rowNumber: number;
   reason: string;
@@ -28,6 +30,7 @@ interface ImportMeta {
   rowCount: number;
   errorCount: number;
   currentBatchId?: string;
+  phase: ImportPhase;
   errorItems: ImportErrorItem[];
   stats: ImportStats;
 }
@@ -59,6 +62,7 @@ export const useScoutStore = create<ScoutState>((set) => ({
     errorCount: 0,
     currentBatchId: undefined,
     importedAt: undefined,
+    phase: "idle",
     errorItems: [],
     stats: {
       insertedCount: 0,

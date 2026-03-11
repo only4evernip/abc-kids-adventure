@@ -1,11 +1,12 @@
 import { useState, type CSSProperties } from "react";
-import type { ImportErrorItem } from "../../store/useScoutStore";
+import type { ImportErrorItem, ImportPhase } from "../../store/useScoutStore";
 
 interface Props {
   importRunning: boolean;
   importProgress: number;
   currentBatchId?: string;
   importedAt?: string;
+  phase: ImportPhase;
   rowCount: number;
   errorCount: number;
   lastMessage: string;
@@ -24,12 +25,30 @@ interface Props {
   totalCount: number;
 }
 
+function phaseLabel(phase: ImportPhase) {
+  switch (phase) {
+    case "parsing":
+      return "解析 CSV";
+    case "validating":
+      return "校验数据";
+    case "saving":
+      return "写入本地库";
+    case "done":
+      return "已完成";
+    case "failed":
+      return "失败";
+    default:
+      return "空闲";
+  }
+}
+
 export function ImportSection(props: Props) {
   const {
     importRunning,
     importProgress,
     currentBatchId,
     importedAt,
+    phase,
     rowCount,
     errorCount,
     lastMessage,
@@ -64,7 +83,8 @@ export function ImportSection(props: Props) {
       </section>
 
       <section style={{ marginTop: 20, padding: 16, border: "1px solid #eee", borderRadius: 12, background: "#fafafa" }}>
-        <div><strong>状态：</strong>{importRunning ? "导入中" : "空闲"}</div>
+        <div><strong>状态：</strong>{importRunning ? "导入中" : phaseLabel(phase)}</div>
+        <div><strong>当前阶段：</strong>{phaseLabel(phase)}</div>
         <div><strong>进度：</strong>{importProgress}%</div>
         <div><strong>最近消息：</strong>{lastMessage}</div>
         <div><strong>当前批次：</strong>{currentBatchId || "-"}</div>

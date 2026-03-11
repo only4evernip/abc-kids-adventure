@@ -25,6 +25,12 @@ export interface ImportStats {
 
 export type ScoreWorkerOutput =
   | {
+      type: "phase";
+      batchId: string;
+      phase: "parsing" | "validating" | "saving";
+      message: string;
+    }
+  | {
       type: "progress";
       batchId: string;
       processed: number;
@@ -199,6 +205,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
   const { file, batchId } = event.data;
 
   try {
+    self.postMessage({ type: "phase", batchId, phase: "parsing", message: "正在解析 CSV 文件" } satisfies ScoreWorkerOutput);
     const rows = await parseCsvFile(file);
     const total = rows.length;
     let errorCount = 0;
@@ -206,6 +213,8 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
     let stats = emptyImportStats();
     const buffer: ProductRecord[] = [];
     const errorItems: ImportErrorItem[] = [];
+
+    self.postMessage({ type: "phase", batchId, phase: "validating", message: "正在校验并标准化数据" } satisfies ScoreWorkerOutput);
 
     for (let index = 0; index < rows.length; index += 1) {
       const raw = rows[index];
@@ -222,6 +231,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
       }
 
       if (buffer.length >= 500) {
+        self.postMessage({ type: "phase", batchId, phase: "saving", message: "正在分批写入本地数据库" } satisfies ScoreWorkerOutput);
         stats = mergeStats(stats, await bulkSave(buffer.splice(0, buffer.length)));
         saved = index + 1 - errorCount;
       }
@@ -239,6 +249,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
     }
 
     if (buffer.length > 0) {
+      self.postMessage({ type: "phase", batchId, phase: "saving", message: "正在完成最后一批落库" } satisfies ScoreWorkerOutput);
       stats = mergeStats(stats, await bulkSave(buffer.splice(0, buffer.length)));
       saved = total - errorCount;
     }

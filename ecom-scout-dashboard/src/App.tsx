@@ -80,6 +80,7 @@ export default function App() {
     setImportMeta({
       currentBatchId: undefined,
       importedAt: undefined,
+      phase: "idle",
       rowCount: 0,
       errorCount: 0,
       errorItems: [],
@@ -106,6 +107,7 @@ export default function App() {
     setImportMeta({
       currentBatchId: "session-import",
       importedAt: new Date().toISOString(),
+      phase: "done",
       rowCount: count,
       errorCount: 0,
       errorItems: [],
@@ -142,6 +144,7 @@ export default function App() {
         importProgress={importProgress}
         currentBatchId={importMeta.currentBatchId}
         importedAt={importMeta.importedAt}
+        phase={importMeta.phase}
         rowCount={importMeta.rowCount}
         errorCount={importMeta.errorCount}
         lastMessage={lastMessage}
