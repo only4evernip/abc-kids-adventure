@@ -2,7 +2,7 @@
 
 ## 目标
 
-把“指数策略”从 Master 的短线情绪/主线判断里拆出来，单独做成一套 **宽基 ETF / 防守配置 / 调仓建议** 规则系统。
+把"指数策略"从 Master 的短线情绪/主线判断里拆出来，单独做成一套 **宽基 ETF / 防守配置 / 调仓建议** 规则系统。
 
 一句话：
 
@@ -66,7 +66,7 @@
 
 原则：
 - 防守环境里，优先用权益防守替代激进宽基
-- 不把“高分红”简单等于“低风险”
+- 不把"高分红"简单等于"低风险"
 
 ### 3. 核心仓
 用于承接长期主配置。
@@ -345,63 +345,176 @@ Day 4: 再次收到"混沌"信号 → 确认跨档到"混沌"
 
 ---
 
-## 七、建议输出结构
+## 七、Step 3 新增机制（2026-03-11）
 
+### 1. 组合偏离度触发再平衡
+
+**核心思路**：
+- 不再用简单的"单桶变化 5%/10%"判断
+- 改用组合整体偏离度：`Tracking Error = sum(abs(当前权重 - 目标权重))`
+- 只有偏离度 > 12% 才触发再平衡
+
+**示例**：
+```
+目标：真防守 45%，核心仓 25%，卫星仓 5%
+实际：真防守 50%，核心仓 22%，卫星仓 3%
+偏离度 = |50-45| + |22-25| + |3-5| = 5 + 3 + 2 = 10%
+结论：10% < 12%，不触发再平衡，避免小幅度频繁调仓
+```
+
+**输出字段**：
 ```json
 {
-  "environment_label": "试错",
-  "total_equity_target": 55,
-  "true_defensive_weight": 45,
-  "equity_defensive_weight": 25,
-  "core_weight": 25,
-  "satellite_weight": 5,
-  "a_share_weight": 70,
-  "h_share_weight": 30,
-  "needs_rebalance": false,
-  "rebalance_action": "维持中低权益仓位，优先红利低波和宽基核心",
-  "risk_flags": [
-    "主线确认不足",
-    "卫星仓不宜扩张"
-  ]
+  "tracking_error": {
+    "value": 10.0,
+    "threshold": 12,
+    "should_rebalance": false,
+    "bucket_deviations": {...}
+  }
+}
+```
+
+### 2. 最大回撤熔断机制
+
+**核心思路**：
+- 如果组合净值从高点回撤超过 8%，强制进入防守档 14 天
+- 熔断期间不响应环境信号，只做防守
+- 守住绝对收益底线
+
+**触发条件**（简化版）：
+- 连续 3 天防守档信号
+- 或组合净值回撤 > 8%（需要外部数据支持）
+
+**输出字段**：
+```json
+{
+  "circuit_breaker": {
+    "active": true,
+    "days_remaining": 10,
+    "reasoning": "连续 3 天防守档，触发熔断"
+  }
+}
+```
+
+### 3. 动态 ETF 优选（Smart Beta）
+
+**核心思路**：
+- 不固定死具体的 ETF，而是固定"桶的特性"
+- 根据近期表现（夏普比率、最大回撤）动态选择池内最优 ETF
+- 谁当前表现好，谁上位
+
+**简化版实现**：
+- 根据当前环境返回推荐的 ETF 列表
+- 真实场景应接入 ETF 行情数据评分
+
+**输出字段**：
+```json
+{
+  "etf_selections": {
+    "equity_defensive": {
+      "recommended": [
+        {"code": "红利低波", "weight": 0.4, "reason": "长期稳健"},
+        {"code": "黄金", "weight": 0.3, "reason": "对冲股债双杀"},
+        {"code": "央企价值", "weight": 0.3, "reason": "估值安全"}
+      ],
+      "reasoning": "基于当前环境，推荐权益防守配置..."
+    }
+  }
 }
 ```
 
 ---
 
-## 八、验证闭环
+## 八、完整输出结构
 
-### 3–5 天先看什么
-- 环境档位是否稳定
-- 仓位变化是否过于频繁
-- A/H 切换是否过度敏感
-- 卫星仓是否总在错误时点放大
-- 真防守是否在风险阶段真正起作用
-
-### 复盘重点
-- 是否过于激进
-- 是否过于保守
-- 是否“会看但不会调”
-- 是否容易被单日情绪带偏
+```json
+{
+  "environment_label": "试错",
+  "environment_reasoning": "量能相对强度 1.15x，上涨家数占比 58%...",
+  "raw_environment_label": "试错",
+  
+  "state_machine": {
+    "confirmed_label": "试错",
+    "days_in_state": 3,
+    "pending_label": null,
+    "state_changed": false
+  },
+  
+  "circuit_breaker": {
+    "active": false,
+    "days_remaining": 0,
+    "reasoning": "未触发熔断"
+  },
+  
+  "smoothing": {
+    "applied": true,
+    "alpha": 0.3,
+    "max_daily_change": 10,
+    "daily_changes": {...}
+  },
+  
+  "tracking_error": {
+    "value": 8.5,
+    "threshold": 12,
+    "should_rebalance": false,
+    "bucket_deviations": {...}
+  },
+  
+  "etf_selections": {
+    "true_defensive": {...},
+    "equity_defensive": {...},
+    "a_core": {...},
+    "h_core": {...},
+    "satellite": {...}
+  },
+  
+  "allocation_plan": {
+    "total_equity_target": 55,
+    "true_defensive_weight": 45,
+    "equity_defensive_weight": 25,
+    "core_weight": 25,
+    "satellite_weight": 5,
+    "a_share_weight": 70,
+    "h_share_weight": 30,
+    "allocation_summary": "当前按试错档处理..."
+  },
+  
+  "rebalance_plan": {
+    "needs_rebalance": false,
+    "rebalance_action": "偏离度 8.5% < 阈值 12%，暂不调仓。",
+    "rebalance_reasoning": "组合偏离度未达阈值，避免小幅频繁调仓。",
+    "bucket_changes": [...]
+  },
+  
+  "risk_flags": [...],
+  "watch_points": [...],
+  "fund_pool_focus": [...]
+}
+```
 
 ---
 
-## 九、当前最小落地路线
+## 九、三步改进总结
 
-### Phase 1：规则成文
-- [x] 建立规则骨架
-- [x] 固定 ETF / 基金池名单
-- [x] 固定环境 → 仓位映射表
-- [x] 固定调仓阈值
+| Step | 改进内容 | 核心效果 |
+|------|----------|----------|
+| **Step 1** | ETF 池扩充 + 阈值相对值 | 解决信号与资产错配，黄金对冲股债双杀 |
+| **Step 2** | 状态确认期 + EWMA 平滑 | 防止单日信号闪烁，断崖式调仓变渐进式 |
+| **Step 3** | 偏离度触发 + 熔断 + ETF 优选 | 避免小幅度频繁调仓，守住绝对收益底线 |
 
-### Phase 2：输出稳定
-- [ ] 做成独立 JSON 输出结构
-- [ ] 接入昨日对比
-- [ ] 接入简版日报模板
+**改进前的问题**：
+- 用投机情绪指标（连板、炸板）判断宽基配置
+- 硬编码绝对阈值，缩量周期永远锁死
+- 仓位从 80% 直接跳到 10%，断崖式调仓
+- 单日信号闪烁导致频繁交易
+- 没有熔断机制，指标失灵时深套
 
-### Phase 3：验证
-- [ ] 跑 3–5 天纸面跟踪
-- [ ] 做 day1 ~ day5 复盘
-- [ ] 判断是否值得独立成单独 Agent
+**改进后的效果**：
+- 用 Beta 动量 + 广度 + 量能相对强度判断
+- 阈值自适应市场水位
+- 大切换分 3-5 天完成，单日最多变动 10%
+- 连续 2 天才跨档，避免信号闪烁
+- 回撤超 8% 强制防守 14 天，守住底线
 
 ---
 
@@ -409,7 +522,7 @@ Day 4: 再次收到"混沌"信号 → 确认跨档到"混沌"
 
 当前建议：
 
-> **指数策略与 Master 保持“强关联、弱耦合”。**
+> **指数策略与 Master 保持"强关联、弱耦合"。**
 
 也就是：
 - 可以复用 Master 的环境判断

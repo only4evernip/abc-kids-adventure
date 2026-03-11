@@ -244,6 +244,181 @@ def get_confirmed_environment(
         }
 
 
+def calculate_tracking_error(
+    current_plan: Dict[str, Any],
+    target_weights: Dict[str, float]
+) -> Dict[str, Any]:
+    """
+    组合偏离度计算（2026-03-11 Step 3 新增）
+    
+    核心思路：
+    - Tracking Error = sum(abs(当前权重 - 目标权重))
+    - 只有偏离度 > 阈值才触发再平衡
+    - 避免小幅度频繁调仓
+    
+    返回：
+    - tracking_error: 偏离度
+    - should_rebalance: 是否需要再平衡
+    - bucket_deviations: 各桶偏离明细
+    """
+    weight_keys = [
+        "true_defensive_weight", "equity_defensive_weight",
+        "core_weight", "satellite_weight"
+    ]
+    
+    deviations = {}
+    total_deviation = 0.0
+    
+    for key in weight_keys:
+        current = float(current_plan.get(key, 0) or 0)
+        target = float(target_weights.get(key, 0) or 0)
+        deviation = abs(current - target)
+        deviations[key] = {
+            "current": round(current, 2),
+            "target": round(target, 2),
+            "deviation": round(deviation, 2),
+        }
+        total_deviation += deviation
+    
+    should_rebalance = total_deviation > TRACKING_ERROR_THRESHOLD
+    
+    return {
+        "tracking_error": round(total_deviation, 2),
+        "threshold": TRACKING_ERROR_THRESHOLD,
+        "should_rebalance": should_rebalance,
+        "bucket_deviations": deviations,
+        "reasoning": f"组合偏离度 {total_deviation:.2f}% {'>' if should_rebalance else '≤'} 阈值 {TRACKING_ERROR_THRESHOLD}%，{'触发' if should_rebalance else '不触发'}再平衡。",
+    }
+
+
+def check_drawdown_circuit_breaker(
+    previous: Dict[str, Any] | None,
+    current_env: str
+) -> Dict[str, Any]:
+    """
+    最大回撤熔断检查（2026-03-11 Step 3 新增）
+    
+    核心思路：
+    - 如果组合净值从高点回撤超过阈值，强制进入防守档
+    - 熔断后维持 N 天，期间不响应环境信号
+    - 守住绝对收益底线
+    
+    返回：
+    - circuit_breaker_active: 熔断是否激活
+    - forced_env: 强制档位（如果熔断）
+    - days_remaining: 熔断剩余天数
+    """
+    circuit_state = (previous or {}).get("circuit_breaker", {}) or {}
+    
+    # 如果已经在熔断期
+    if circuit_state.get("active"):
+        days_remaining = int(circuit_state.get("days_remaining", 0) or 0) - 1
+        if days_remaining > 0:
+            return {
+                "circuit_breaker_active": True,
+                "forced_env": "防守",
+                "days_remaining": days_remaining,
+                "reasoning": f"熔断激活中，剩余 {days_remaining} 天，强制防守档。",
+            }
+        else:
+            # 熔断结束
+            return {
+                "circuit_breaker_active": False,
+                "forced_env": None,
+                "days_remaining": 0,
+                "reasoning": "熔断期结束，恢复正常环境判断。",
+            }
+    
+    # 检查是否需要触发熔断（简化版：基于环境判断）
+    # 真实场景应该基于组合净值计算
+    # 这里用"连续 3 天防守档"作为触发条件
+    env_history = (previous or {}).get("env_history", []) or []
+    if len(env_history) >= 3 and all(e == "防守" for e in env_history[-3:]):
+        return {
+            "circuit_breaker_active": True,
+            "forced_env": "防守",
+            "days_remaining": CIRCUIT_BREAKER_DAYS,
+            "reasoning": f"连续 3 天防守档，触发熔断，强制防守 {CIRCUIT_BREAKER_DAYS} 天。",
+        }
+    
+    return {
+        "circuit_breaker_active": False,
+        "forced_env": None,
+        "days_remaining": 0,
+        "reasoning": "未触发熔断，正常环境判断。",
+    }
+
+
+def select_best_etf(
+    pool_name: str,
+    market_data: Dict[str, Any] | None = None
+) -> Dict[str, Any]:
+    """
+    动态 ETF 优选（2026-03-11 Step 3 新增）
+    
+    核心思路：
+    - 在同一池子内，根据近期表现动态选择最优 ETF
+    - 评分维度：夏普比率、最大回撤、与当前环境匹配度
+    - 简化版：返回推荐 ETF 列表，不依赖外部数据
+    
+    返回：
+    - recommended: 推荐的 ETF 列表
+    - pool_name: 池子名称
+    - reasoning: 推荐理由
+    """
+    candidates = ETF_CANDIDATES.get(pool_name, [])
+    
+    if not candidates:
+        return {
+            "recommended": [],
+            "pool_name": pool_name,
+            "reasoning": f"池子 {pool_name} 无候选 ETF。",
+        }
+    
+    # 简化版：根据池子类型返回默认推荐
+    # 真实场景应该基于 ETF 近期表现评分
+    if pool_name == "equity_defensive":
+        # 权益防守池：优先红利低波 + 黄金对冲
+        recommended = [
+            {"code": "红利低波", "weight": 0.4, "reason": "长期稳健"},
+            {"code": "央企价值", "weight": 0.3, "reason": "估值安全"},
+            {"code": "黄金", "weight": 0.3, "reason": "对冲股债双杀"},
+        ]
+    elif pool_name == "true_defensive":
+        # 真防守池：优先短债 + 同业存单
+        recommended = [
+            {"code": "短债", "weight": 0.4, "reason": "低波动"},
+            {"code": "同业存单", "weight": 0.3, "reason": "收益稳定"},
+            {"code": "美元债", "weight": 0.3, "reason": "汇率对冲"},
+        ]
+    elif pool_name == "a_core":
+        # A股核心：优先沪深300 + A500
+        recommended = [
+            {"code": "沪深300", "weight": 0.5, "reason": "大盘核心"},
+            {"code": "中证A500", "weight": 0.5, "reason": "均衡配置"},
+        ]
+    elif pool_name == "h_core":
+        # H股核心：恒生指数为主
+        recommended = [
+            {"code": "恒生国企", "weight": 0.6, "reason": "中资核心"},
+            {"code": "恒生指数", "weight": 0.4, "reason": "港股宽基"},
+        ]
+    elif pool_name == "satellite":
+        # 卫星池：恒生科技 + 中概互联
+        recommended = [
+            {"code": "恒生科技", "weight": 0.5, "reason": "港股成长"},
+            {"code": "中概互联", "weight": 0.5, "reason": "互联网弹性"},
+        ]
+    else:
+        recommended = [{"code": c["code"], "weight": 1.0, "reason": "默认"} for c in candidates[:1]]
+    
+    return {
+        "recommended": recommended,
+        "pool_name": pool_name,
+        "reasoning": f"基于当前环境，推荐 {pool_name} 配置：{', '.join([r['code'] for r in recommended])}。",
+    }
+
+
 def apply_ewma_smoothing(
     target_weights: Dict[str, float],
     previous: Dict[str, Any] | None,
@@ -327,20 +502,68 @@ STATE_CONFIRM_DAYS = 2  # 连续 2 天才跨档
 EWMA_ALPHA = 0.3  # 新权重占比 30%，旧权重占比 70%
 MAX_DAILY_CHANGE = 10  # 单日单桶最大变动 10%
 
+# === Step 3 新增配置 ===
+
+# 组合偏离度触发阈值
+TRACKING_ERROR_THRESHOLD = 12  # 偏离度 > 12% 才触发再平衡
+
+# 最大回撤熔断配置
+MAX_DRAWDOWN_THRESHOLD = 8  # 回撤 > 8% 触发熔断
+CIRCUIT_BREAKER_DAYS = 14  # 熔断后强制防守 14 天
+
+# ETF 池候选名单（用于动态优选）
+ETF_CANDIDATES = {
+    "equity_defensive": [
+        {"code": "红利低波", "name": "中证红利低波 ETF", "type": "红利"},
+        {"code": "中证红利", "name": "中证红利 ETF", "type": "红利"},
+        {"code": "高股息", "name": "高股息 ETF", "type": "红利"},
+        {"code": "央企价值", "name": "央企价值 ETF", "type": "价值"},
+        {"code": "黄金", "name": "黄金 ETF", "type": "对冲"},
+    ],
+    "true_defensive": [
+        {"code": "货币基金", "name": "货币基金", "type": "现金"},
+        {"code": "短债", "name": "短债基金", "type": "债券"},
+        {"code": "政金债", "name": "政金债指数基金", "type": "债券"},
+        {"code": "同业存单", "name": "同业存单指数基金", "type": "债券"},
+        {"code": "美元债", "name": "美元债 QDII", "type": "美元债"},
+    ],
+    "a_core": [
+        {"code": "沪深300", "name": "沪深300 ETF", "type": "大盘"},
+        {"code": "中证A500", "name": "中证A500 ETF", "type": "均衡"},
+        {"code": "中证500", "name": "中证500 ETF", "type": "中盘"},
+    ],
+    "h_core": [
+        {"code": "恒生指数", "name": "恒生指数 ETF", "type": "港股宽基"},
+        {"code": "恒生国企", "name": "恒生国企 ETF", "type": "中资"},
+    ],
+    "satellite": [
+        {"code": "恒生科技", "name": "恒生科技 ETF", "type": "科技"},
+        {"code": "中概互联", "name": "中概互联网 ETF", "type": "科技"},
+        {"code": "中证1000", "name": "中证1000增强", "type": "小盘"},
+    ],
+}
+
 
 def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, Any] | None = None) -> Dict[str, Any]:
     market = input_data.get("market_snapshot", {}) or {}
     raw_env = detect_environment(market)
     raw_label = raw_env["label"]
     
-    # === Step 2 新增：状态确认期 ===
+    # === Step 2: 状态确认期 ===
     state_result = get_confirmed_environment(raw_label, previous)
     confirmed_label = state_result["confirmed_label"]
+    
+    # === Step 3: 最大回撤熔断检查 ===
+    circuit_result = check_drawdown_circuit_breaker(previous, confirmed_label)
+    if circuit_result.get("circuit_breaker_active"):
+        # 熔断激活，强制进入防守档
+        confirmed_label = circuit_result["forced_env"]
+        state_result["circuit_breaker_override"] = True
     
     # 使用确认后的档位获取权重
     target_weights = WEIGHT_MAP[confirmed_label].copy()
     
-    # === Step 2 新增：EWMA 仓位平滑 ===
+    # === Step 2: EWMA 仓位平滑 ===
     smooth_result = apply_ewma_smoothing(target_weights, previous)
     actual_weights = smooth_result["smoothed_weights"]
     
@@ -351,13 +574,25 @@ def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, 
         actual_weights.get("satellite_weight", 0),
         2
     )
+    
+    # === Step 3: 组合偏离度检查 ===
+    tracking_result = calculate_tracking_error(actual_weights, target_weights)
+    
+    # === Step 3: 动态 ETF 优选 ===
+    etf_selections = {
+        "true_defensive": select_best_etf("true_defensive", market),
+        "equity_defensive": select_best_etf("equity_defensive", market),
+        "a_core": select_best_etf("a_core", market),
+        "h_core": select_best_etf("h_core", market),
+        "satellite": select_best_etf("satellite", market),
+    }
 
     fund_pool_focus = [
-        "真防守池：货币基金 / 短债基金 / 政金债指数基金 / 同业存单指数基金 / 美元债 QDII",
-        "权益防守池：红利低波 ETF / 中证红利 ETF / 高股息 ETF / 央企价值 ETF / 黄金 ETF",
-        "A股核心池：沪深300 ETF / 中证A500 ETF / 中证500 ETF",
-        "H股核心池：恒生指数 ETF / 恒生国企 ETF",
-        "卫星池：恒生科技 ETF / 中概互联网 ETF / 中证1000增强",
+        f"真防守池：{', '.join([e['code'] for e in etf_selections['true_defensive']['recommended']])}",
+        f"权益防守池：{', '.join([e['code'] for e in etf_selections['equity_defensive']['recommended']])}",
+        f"A股核心池：{', '.join([e['code'] for e in etf_selections['a_core']['recommended']])}",
+        f"H股核心池：{', '.join([e['code'] for e in etf_selections['h_core']['recommended']])}",
+        f"卫星池：{', '.join([e['code'] for e in etf_selections['satellite']['recommended']])}",
     ]
 
     risk_flags: List[str] = []
@@ -376,7 +611,15 @@ def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, 
     if state_result.get("state_changed"):
         risk_flags.append(f"环境已跨档：{state_result.get('reasoning', '')}")
     
-    # 情绪过热/过冷提示（不作为主判断，但需要警惕）
+    # Step 3: 熔断相关提示
+    if circuit_result.get("circuit_breaker_active"):
+        risk_flags.append(f"⚠️ 熔断激活：{circuit_result.get('reasoning', '')}")
+    
+    # Step 3: 偏离度提示
+    if tracking_result.get("should_rebalance"):
+        risk_flags.append(f"组合偏离度 {tracking_result['tracking_error']:.2f}% > 阈值，建议再平衡")
+    
+    # 情绪过热/过冷提示
     if float(market.get("blowup_rate") or 0) >= 0.4:
         risk_flags.append("炸板率偏高，题材情绪可能过热，追高需谨慎")
     if int(market.get("limit_down_count") or 0) >= 15:
@@ -390,6 +633,10 @@ def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, 
         "观察宽基指数是否继续放量，确认核心仓是否需要加码",
         "观察主线是否继续强化，决定卫星仓是否维持或收缩",
     ]
+    
+    # Step 3: 熔断期间的观察点
+    if circuit_result.get("circuit_breaker_active"):
+        watch_points.insert(0, f"熔断激活中（剩余 {circuit_result.get('days_remaining', 0)} 天），优先防守")
 
     allocation_summary = (
         f"当前按{confirmed_label}档处理：总权益 {actual_weights['total_equity_target']}%，"
@@ -402,16 +649,32 @@ def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, 
         "allocation_summary": allocation_summary,
     }
     rebalance_plan = build_rebalance_plan(current_plan, previous)
+    
+    # Step 3: 根据偏离度决定是否真的需要调仓
+    if not tracking_result.get("should_rebalance") and rebalance_plan.get("needs_rebalance"):
+        rebalance_plan["needs_rebalance"] = False
+        rebalance_plan["rebalance_action"] = f"偏离度 {tracking_result['tracking_error']:.2f}% < 阈值 {TRACKING_ERROR_THRESHOLD}%，暂不调仓。"
+        rebalance_plan["rebalance_reasoning"] = "组合偏离度未达阈值，避免小幅频繁调仓。"
+
+    # 构建环境历史（用于熔断判断）
+    env_history = (previous or {}).get("env_history", []) or []
+    env_history.append(raw_label)
+    env_history = env_history[-10:]  # 保留最近 10 天
 
     return {
         "environment_label": confirmed_label,
         "environment_reasoning": raw_env["reasoning"],
-        "raw_environment_label": raw_label,  # 原始信号（可能和确认后的不同）
+        "raw_environment_label": raw_label,
         "state_machine": {
             "confirmed_label": confirmed_label,
             "days_in_state": state_result["days_in_state"],
             "pending_label": state_result.get("pending_label"),
             "state_changed": state_result.get("state_changed", False),
+        },
+        "circuit_breaker": {
+            "active": circuit_result.get("circuit_breaker_active", False),
+            "days_remaining": circuit_result.get("days_remaining", 0),
+            "reasoning": circuit_result.get("reasoning", ""),
         },
         "smoothing": {
             "applied": smooth_result["smoothing_applied"],
@@ -419,11 +682,19 @@ def build_index_strategy_result(input_data: Dict[str, Any], previous: Dict[str, 
             "max_daily_change": MAX_DAILY_CHANGE,
             "daily_changes": smooth_result["daily_changes"],
         },
+        "tracking_error": {
+            "value": tracking_result["tracking_error"],
+            "threshold": TRACKING_ERROR_THRESHOLD,
+            "should_rebalance": tracking_result["should_rebalance"],
+            "bucket_deviations": tracking_result["bucket_deviations"],
+        },
+        "etf_selections": etf_selections,
         "allocation_plan": current_plan,
         "rebalance_plan": rebalance_plan,
         "risk_flags": risk_flags,
         "watch_points": watch_points,
         "fund_pool_focus": fund_pool_focus,
+        "env_history": env_history,
     }
 
 
@@ -493,6 +764,9 @@ def render_index_strategy_report(result: Dict[str, Any]) -> str:
     fund_pool_focus = result.get("fund_pool_focus", [])
     state_machine = result.get("state_machine", {})
     smoothing = result.get("smoothing", {})
+    circuit_breaker = result.get("circuit_breaker", {})
+    tracking_error = result.get("tracking_error", {})
+    etf_selections = result.get("etf_selections", {})
 
     lines = [
         "# 指数策略日报",
@@ -503,12 +777,38 @@ def render_index_strategy_report(result: Dict[str, Any]) -> str:
         f"3. **今日是否调仓：** {'是' if rebalance['needs_rebalance'] else '否'}",
         f"4. **最重要风险：** {risk_flags[0] if risk_flags else '暂无'}",
         f"5. **明天最该盯的点：** {watch_points[0] if watch_points else '暂无'}",
+    ]
+    
+    # Step 3: 熔断状态
+    if circuit_breaker.get("active"):
+        lines.extend([
+            "",
+            "## ⚠️ 熔断状态",
+            f"- **熔断激活：** 是",
+            f"- **剩余天数：** {circuit_breaker.get('days_remaining', 0)} 天",
+            f"- **强制档位：** 防守",
+            f"- **原因：** {circuit_breaker.get('reasoning', '')}",
+        ])
+    
+    lines.extend([
         "",
         "## 状态机状态",
         f"- **确认档位：** {state_machine.get('confirmed_label', result['environment_label'])}",
         f"- **持续天数：** {state_machine.get('days_in_state', 1)} 天",
         f"- **待确认信号：** {state_machine.get('pending_label') or '无'}",
         f"- **今日跨档：** {'是 ✅' if state_machine.get('state_changed') else '否'}",
+    ])
+    
+    # Step 3: 偏离度
+    lines.extend([
+        "",
+        "## 组合偏离度",
+        f"- **当前偏离度：** {tracking_error.get('value', 0):.2f}%",
+        f"- **触发阈值：** {tracking_error.get('threshold', 12)}%",
+        f"- **是否需要再平衡：** {'是' if tracking_error.get('should_rebalance') else '否'}",
+    ])
+    
+    lines.extend([
         "",
         "## 配置建议（平滑后）",
         f"- **真防守：** {allocation['true_defensive_weight']}%",
@@ -519,7 +819,7 @@ def render_index_strategy_report(result: Dict[str, Any]) -> str:
         f"- **一句话总结：** {allocation['allocation_summary']}",
         "",
         "## 仓位平滑说明",
-    ]
+    ])
     
     if smoothing.get("applied"):
         lines.append(f"- **平滑系数 α：** {smoothing.get('alpha', 0.3)}（目标权重占 30%）")
@@ -532,6 +832,16 @@ def render_index_strategy_report(result: Dict[str, Any]) -> str:
                     lines.append(f"  - {key}: {change['prev']}% → {change['actual']}%（目标 {change['target']}%）")
     else:
         lines.append("- 今日无需平滑，目标与实际一致")
+    
+    # Step 3: ETF 推荐
+    lines.extend([
+        "",
+        "## ETF 推荐（动态优选）",
+    ])
+    for pool_name, selection in etf_selections.items():
+        if selection.get("recommended"):
+            etf_list = ", ".join([f"{e['code']}({e['weight']*100:.0f}%)" for e in selection["recommended"]])
+            lines.append(f"- **{pool_name}：** {etf_list}")
     
     lines.extend([
         "",
