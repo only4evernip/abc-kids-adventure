@@ -1,122 +1,159 @@
-# 前端架构方案（本地运行 / 无后端 / 数据产品）
+# 前端架构方案（Gemini 评审后重构版）
 
 ## 1. 目标
 
 这是一个 **本地可运行、无后端、偏数据产品** 的选品侦察网页。
 
-核心目标不是“展示数据”，而是：
+它不是普通 BI，也不是内容站。
+它的核心目标是：
 
-1. **先淘汰不该做的方向**
+1. **先用规则排除不该做的方向**
 2. **再对剩余候选做优先级排序**
-3. **最后强制流转到下一步动作**
+3. **最后把分析强制推进到动作**
 
-所以，前端不只是 UI，而是一个带规则引擎的本地工作台。
+所以前端的本质不是“展示层”，而是一个 **本地规则工作台**。
 
 ---
 
-## 2. 技术栈（我最终建议）
+## 2. 技术栈（重构后）
 
-### 核心
+### 核心框架
 - **Vite**
 - **React + TypeScript**
 - **Tailwind CSS**
 - **shadcn/ui**
 
-### 数据层
+### 数据处理
 - **PapaParse**：CSV 解析
-- **Zod**：字段校验 + 类型归一化
-- **Zustand**：全局状态管理
-- **Dexie / IndexedDB**：本地持久化
+- **Zod**：字段校验 + 归一化
+- **Web Worker**：解析、校验、评分、入库
 
-### 复杂视图
-- **TanStack Table**：表格能力
-- **@tanstack/react-virtual**：虚拟滚动
-- **ECharts**：气泡图 / 高密度图表
+### 本地数据层
+- **Dexie / IndexedDB**：主数据仓
+- **dexie-react-hooks**：UI 查询层
 
-### 性能层
-- **Web Worker**：CSV 解析、RPS 评分、规则计算放 worker
+### UI 状态层
+- **Zustand**：只存 UI 状态
 
----
+### 列表能力
+- **TanStack Table**
+- **@tanstack/react-virtual**
 
-## 3. 为什么是这套
-
-### 为什么不是 Next.js
-因为这是本地工具，不靠 SEO，也不需要 SSR。
-
-### 为什么不是 Redux
-因为是数据工具，不是大型多团队前台站点；Zustand 更轻、更直接。
-
-### 为什么必须加 Zod
-CSV 工具最怕的不是“没数据”，而是：
-- 列名不统一
-- 数字字段进来是字符串
-- 空值、脏值、奇怪标签导致页面白屏
-
-Zod 在这里不是可选项，是保险丝。
-
-### 为什么必须加 Worker
-后面一旦 CSV 上千行，再加：
-- RPS 打分
-- 一票否决
-- 假阳性识别
-- VOC 规则判断
-
-主线程一定会卡。
+### 图表（延后）
+- **ECharts**（不是 MVP 必做）
 
 ---
 
-## 4. 页面优先级
+## 3. 这次最关键的架构修正
 
-## MVP 只做 3 页
+## 修正一：Dexie 是主仓，不是 Zustand
 
-### Page 1：导入与校验页
+### 不再这样做
+- Zustand 存 `rawRows`
+- Zustand 存 `scoredRows`
+
+### 改成这样
+- CSV 解析后直接入 **Dexie**
+- React 页面通过 `useLiveQuery` 从 Dexie 查数据
+- Zustand 只放轻状态：
+  - filters
+  - sortModel
+  - selectedRowId
+  - drawerOpen
+  - importProgress
+
+### 原因
+如果导入几千到几万行 CSV，把全量数据塞进 Zustand：
+- React 状态树会膨胀
+- DevTools 会卡
+- 内存占用会飙升
+- 筛选时会非常容易掉帧
+
+---
+
+## 4. Worker 职责（重构后）
+
+Worker 不是可选项，而是主链路核心。
+
+### Worker 负责
+1. PapaParse 解析 CSV
+2. Zod 校验列与字段
+3. 字段归一化
+4. Eligibility Gate
+5. RPS 评分
+6. 打标签（假阳性 / 过热 / 数据过期）
+7. **bulkPut 到 Dexie**
+
+### 主线程负责
+1. 触发导入
+2. 接收 Worker 进度
+3. 渲染表格
+4. 控制筛选 / 抽屉 / 动作栏
+
+### 原则
+主线程不要接收“几万行完整打分结果数组”。
+主线程只接收：
+- `done`
+- `count`
+- `errors`
+- `batchId`
+
+---
+
+## 5. MVP 页面重排
+
+## 第一版只做 2.5 页
+
+### Page 1：导入页
 功能：
 - 上传 CSV
-- 字段校验
-- 缺失列提示
-- 导入预览
+- 校验字段
+- 显示缺失列
+- 导入结果统计
 
-### Page 2：选品发现矩阵（主战场）
+### Page 2：发现矩阵（主战场）
 功能：
-- 超级筛选器
-- 数据表格
-- RPS 标签
-- 一票否决标记
-- 蓝海散点图
+- 左侧筛选器
+- 中间高性能表格
+- RPS 分数标签
+- Eligibility Gate 标记
+- 风险 / 假阳性标签
 
-### Page 3：单品深挖页
+### Page 2.5：右侧详情抽屉（不是完整独立页）
 功能：
-- 产品画像
 - VOC 差评 / 想要点
-- Eligibility Gate 结果
-- RPS 贡献条
+- 打分明细
 - 下一步动作
+- 本地备注
 
 ## 暂缓
-- Dashboard 总览
+- Dashboard Overview
+- 蓝海散点图
+- 看板拖拽
+- 雷达图
 - 老板管理视图
-- 过多花哨图表
 
 ---
 
-## 5. 目录结构
+## 6. 目录结构（重构后）
 
 ```text
 src/
 ├── app/
 ├── components/
-│   ├── discovery/
-│   ├── deepdive/
 │   ├── import/
+│   ├── discovery/
+│   ├── detail/
 │   └── shared/
 ├── domain/
-│   ├── eligibility.ts
 │   ├── rps.ts
+│   ├── eligibility.ts
 │   ├── tags.ts
 │   └── workflow.ts
 ├── lib/
-│   ├── csv-schema.ts
+│   ├── csvSchema.ts
 │   ├── fieldMap.ts
+│   ├── db.ts
 │   └── formatters.ts
 ├── store/
 │   └── useScoutStore.ts
@@ -129,72 +166,69 @@ src/
 
 ---
 
-## 6. 状态管理原则
+## 7. 状态管理原则
 
-Store 里只存：
-- `rawRows`
-- `normalizedRows`
-- `filters`
-- `selectedRowId`
-- `kanbanCards`
-- `notes`
-- `importMeta`
-- `uiState`
+### Dexie 存什么
+- 全量产品记录
+- 导入批次号
+- RPS 结果
+- workflowStatus
+- 本地备注
+- 标签
 
-**不要直接存**：
-- `filteredRows`
-- `sortedRows`
-- `chartRows`
+### Zustand 存什么
+- 当前筛选条件
+- 当前排序
+- 当前选中的行
+- Drawer 开关
+- 当前导入进度
+- UI 偏好
 
-这些都应该是 selector / memo 派生状态。
+### 不要放进 Zustand 的东西
+- 完整 CSV 数组
+- 评分后的完整结果数组
+- 图表聚合结果数组
 
 ---
 
-## 7. 数据流水线
+## 8. 数据流水线
 
 ```text
-CSV 上传
-  -> PapaParse 解析
-  -> Zod 校验
-  -> 字段归一化
-  -> Eligibility Gate
-  -> RPS 评分
-  -> 标签生成
-  -> 入 Zustand / Dexie
-  -> 页面消费
+上传 CSV
+  -> PapaParse（worker）
+  -> Zod 校验（worker）
+  -> 字段归一化（worker）
+  -> Eligibility Gate（worker）
+  -> RPS 评分（worker）
+  -> 标签生成（worker）
+  -> Dexie bulkPut（worker）
+  -> UI useLiveQuery 渲染表格
 ```
 
 ---
 
-## 8. 工程约束
+## 9. 为什么先不做图表
 
-### 必须满足
-- 本地运行
-- 无后端依赖
-- 可离线查看历史结果
-- 可导出本地 session
+不是图表没用，而是第一版图表不值钱。
 
-### 不建议一开始上
-- 聚类算法
-- DuckDB-WASM
-- 太复杂的图表系统
-- 多层路由
+当前最该先打穿的是：
+
+> **导入 → 判案 → 排序 → 查看详情 → 决定动作**
+
+只要这条链路没通，散点图再漂亮也只是装饰品。
 
 ---
 
-## 9. 先做什么，不先做什么
+## 10. 最危险的坑
 
-### 先做
-- 规则引擎
-- CSV 字段映射
-- 本地评分流水线
-- 表格 + 筛选
+1. 把全量数据放 Zustand
+2. 让 worker 把几万行完整数组 postMessage 回主线程
+3. 太早上图表
+4. 太早上复杂状态机拖拽
+5. 还没跑真实 CSV 就先调 UI 细节
 
-### 后做
-- 美化
-- 花哨大盘
-- 管理汇总页
+---
 
-一句话：
+## 11. 一句话总结
 
-> **先让工具会判案，再让它看起来高级。**
+> **先把本地数据链路打穿，再谈炫图和管理视图。**

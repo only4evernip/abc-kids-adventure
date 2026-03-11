@@ -1,24 +1,29 @@
 # ecom-scout-dashboard
 
-跨境电商选品侦察网页的 **v1 规则包 + 前端骨架**。
+跨境电商选品侦察网页的 **v1 规则包 + 前端骨架（Gemini 评审后重构版）**。
 
-## 我这次先做什么
+## 这次重构的核心变化
 
-我没有直接先搭花哨界面，而是先把最容易返工的 5 件东西固定下来：
+我按 Gemini 的意见做了三刀减法：
 
-1. **字段字典**：把现有 CSV 字段映射成系统字段
-2. **RPS 规则表 v1**：可执行的评分模型，不是空概念
-3. **Eligibility Gate**：一票否决入口，先判能不能做
-4. **状态机**：从“待评估”到“淘汰/供应链核价”的动作流转
-5. **前端代码骨架**：后续真开工时不会从 0 开始
+1. **RPS 去乘法**
+   - 去掉 `riskMultiplier`
+   - 去掉 `confidenceMultiplier` 对总分的直接折损
+   - 去掉 `overheatingPenalty` 的扣分逻辑
+   - 改成：**线性打分 + 固定扣分 + 标签 + 状态分流**
 
-## 为什么不先做 Dashboard
+2. **Dexie 变主数据仓**
+   - 不再让 Zustand 存全量 CSV 数据
+   - Zustand 只保留 UI 状态
+   - 全量产品数据应写入 IndexedDB / Dexie
 
-因为这个工具的本质不是展示数据，而是：
+3. **MVP 收缩成表格优先**
+   - 第一版先不上 Dashboard
+   - 第一版先不上散点图
+   - 第一版先不上拖拽 Kanban
+   - 主战场就是：**导入 -> 评分 -> 表格 -> 筛选 -> 右侧详情抽屉**
 
-> **用规则替代纠结，用证据驱动动作。**
-
-如果规则层没定死，先做图表只会后面全部返工。
+---
 
 ## 当前输入样本
 
@@ -26,50 +31,79 @@
 
 - `候选品侦察池_US_CA.csv`
 
-当前字段共 24 列，已经写进：
-
-- `docs/02-field-mapping.md`
-
-## 文档导航
-
-- `docs/01-frontend-architecture.md`：前端技术架构
-- `docs/02-field-mapping.md`：CSV 字段映射表
-- `docs/03-rps-rules-v1.md`：RPS 评分规则 v1
-- `docs/04-workflow-state-machine.md`：决策流转状态机
-- `src/types/product.ts`：核心类型定义
-- `src/lib/fieldMap.ts`：字段映射常量
-- `src/domain/rps.ts`：评分逻辑代码骨架
-- `src/store/useScoutStore.ts`：状态管理骨架
-- `src/workers/score.worker.ts`：CSV 解析 / 评分 worker 骨架
-
-## 我建议的 MVP 顺序
-
-### 第 1 阶段：先能判
-- CSV 导入
-- 字段校验
-- Eligibility Gate
-- RPS 评分
-- 列表筛选 + RPS 标签
-
-### 第 2 阶段：再能深挖
-- VOC 差评/想要点详情
-- 破局点卡片
-- 人工 override
-- 状态流转看板
-
-### 第 3 阶段：最后才做管理视图
-- Dashboard 总览
-- 筛选漏斗
-- 周报/月报
-
-## 后续接着怎么干
-
-如果要继续往下做，最自然的顺序是：
-
-1. 先补 CSV 缺失字段（利润、合规、供应链）
-2. 再把 `src/domain/rps.ts` 接到真实 CSV 解析流程
-3. 最后再上 React 页面
+当前字段共 24 列，已整理为字段字典。
 
 ---
 
-_这份包现在最适合拿去给 Gemini 做架构/规则复审。_
+## 当前最值钱的文件
+
+### 文档
+- `docs/01-frontend-architecture.md`
+- `docs/02-field-mapping.md`
+- `docs/03-rps-rules-v1.md`
+- `docs/04-workflow-state-machine.md`
+
+### 代码骨架
+- `src/types/product.ts`
+- `src/lib/fieldMap.ts`
+- `src/lib/db.ts`
+- `src/lib/csvSchema.ts`
+- `src/domain/rps.ts`
+- `src/store/useScoutStore.ts`
+- `src/workers/score.worker.ts`
+
+---
+
+## 当前架构判断
+
+现在这套方案不是“完整产品”，而是：
+
+> **一个能继续往真实 CSV 导入链路推进的 v1 开发底座。**
+
+也就是说，它已经适合进入：
+- CSV 真实导入
+- Zod 校验
+- Worker 评分
+- Dexie 入库
+- TanStack Table 展示
+
+但还不适合直接花时间堆图表和老板大盘。
+
+---
+
+## MVP 顺序（重排后）
+
+### Phase 1：先跑通主链路
+- CSV 上传
+- PapaParse 解析
+- Zod 校验
+- Worker 内评分
+- Dexie 入库
+- 表格 + 筛选 + RPS 标签
+
+### Phase 2：再加右侧详情
+- VOC 差评 / 想要点
+- 评分贡献拆解
+- Eligibility Gate 结果
+- 下一步动作
+- 本地备注
+
+### Phase 3：最后再扩展
+- 散点图
+- Dashboard
+- 看板视图
+- 更复杂的统计汇总
+
+---
+
+## 最自然的下一步
+
+如果继续往下做，不该再先聊概念，而是应该直接做：
+
+1. `csvSchema.ts` 接真实 CSV 列
+2. `score.worker.ts` 真写 Dexie
+3. `useLiveQuery` + TanStack Table 跑第一版数据表
+
+---
+
+_这版现在更适合拿去给 Gemini 做第二轮技术复审。_

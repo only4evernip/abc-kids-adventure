@@ -17,6 +17,12 @@ function includesAny(text: string, words: string[]) {
   return words.some((word) => v.includes(word));
 }
 
+function daysSince(dateText: string): number {
+  const ts = Date.parse(dateText);
+  if (Number.isNaN(ts)) return 999;
+  return Math.floor((Date.now() - ts) / (1000 * 60 * 60 * 24));
+}
+
 export function eligibilityGate(row: ProductRow): EligibilityResult {
   const reasons: string[] = [];
 
@@ -26,6 +32,10 @@ export function eligibilityGate(row: ProductRow): EligibilityResult {
 
   if (includesAny(row.initialConclusion, ["侵权", "危险品", "禁入", "专利雷区"])) {
     reasons.push("初筛结论已标记高危禁入");
+  }
+
+  if ((row.currentRating || 0) > 4.6 && (row.reviewCount || 0) > 2000 && !hasText(row.topComplaintPoints)) {
+    reasons.push("创新空间锁死：高评分高壁垒且无明确差评切口");
   }
 
   if (reasons.length > 0) {
@@ -58,7 +68,7 @@ export function scoreReviewGrowth(value: number | null) {
 }
 
 export function scoreBsr(value: number | null) {
-  if (value == null) return 30;
+  if (value == null) return 35;
   if (value <= 100) return 60;
   if (value <= 1000) return 90;
   if (value <= 5000) return 100;
@@ -85,17 +95,17 @@ export function scoreReviewBase(value: number | null) {
   return 10;
 }
 
-export function riskMultiplier(value: Level4 | null) {
-  if (!value) return 0.85;
+export function fixedRiskPenalty(value: Level4 | null) {
+  if (!value) return 5;
   return {
-    低: 1.0,
-    中: 0.8,
-    高: 0.3,
-    极高: 0.0,
+    低: 0,
+    中: 8,
+    高: 15,
+    极高: 100,
   }[value];
 }
 
-export function confidenceMultiplier(row: ProductRow) {
+export function dataQuality(row: ProductRow) {
   const keys: Array<keyof ProductRow> = [
     "currentPrice",
     "currentBsr",
@@ -105,31 +115,17 @@ export function confidenceMultiplier(row: ProductRow) {
     "overallRisk",
   ];
 
-  const missing = keys.filter((key) => row[key] == null || row[key] === "").length;
-  let score = 1.0;
+  const missingCoreFieldCount = keys.filter((key) => row[key] == null || row[key] === "").length;
+  const ageDays = daysSince(row.researchDate);
+  const isStale = ageDays > 15;
+  const needsMoreEvidence = missingCoreFieldCount >= 2;
 
-  if (missing === 1) score = 0.92;
-  else if (missing === 2) score = 0.85;
-  else if (missing === 3) score = 0.75;
-  else if (missing >= 4) score = 0.6;
-
-  if (hasText(row.coreSellingPoints) && hasText(row.topComplaintPoints) && hasText(row.desiredPoints)) {
-    score += 0.03;
-  }
-
-  return Math.min(1, score);
-}
-
-export function overheatingPenalty(row: ProductRow) {
-  let hits = 0;
-  if ((row.reviewGrowth30d || 0) > 100) hits += 1;
-  if ((row.reviewCount || 0) > 2000) hits += 1;
-  if (row.headMonopoly === "高" || row.headMonopoly === "极高") hits += 1;
-  if (row.competitionLevel === "高" || row.competitionLevel === "极高") hits += 1;
-
-  if (hits >= 4) return 15;
-  if (hits >= 2) return 8;
-  return 0;
+  return {
+    missingCoreFieldCount,
+    needsMoreEvidence,
+    isStale,
+    ageDays,
+  };
 }
 
 export function manualOverride(text: string) {
@@ -148,9 +144,16 @@ export function falsePositiveTags(row: ProductRow): string[] {
     tags.push("创新空间锁死");
   }
 
-  if ((row.reviewGrowth30d || 0) > 100 && (row.reviewCount || 0) > 2000 && (row.competitionLevel === "高" || row.competitionLevel === "极高")) {
-    tags.push("过热拥挤");
-  }
+  let heatHits = 0;
+  if ((row.reviewGrowth30d || 0) > 100) heatHits += 1;
+  if ((row.reviewCount || 0) > 2000) heatHits += 1;
+  if (row.headMonopoly === "高" || row.headMonopoly === "极高") heatHits += 1;
+  if (row.competitionLevel === "高" || row.competitionLevel === "极高") heatHits += 1;
+  if (heatHits >= 2) tags.push("过热拥挤");
+
+  const quality = dataQuality(row);
+  if (quality.isStale) tags.push("数据过期");
+  if (quality.needsMoreEvidence) tags.push("待补证");
 
   return tags;
 }
@@ -164,6 +167,7 @@ export function classifyLevel(score: number): { level: RpsLevel; status: Workflo
 
 export function calculateRps(row: ProductRow): RpsResult {
   const eligibility = eligibilityGate(row);
+  const quality = dataQuality(row);
 
   const reviewGrowthScore = scoreReviewGrowth(row.reviewGrowth30d);
   const bsrScore = scoreBsr(row.currentBsr);
@@ -184,22 +188,27 @@ export function calculateRps(row: ProductRow): RpsResult {
 
   const rawScore =
     reviewGrowthScore * 0.25 +
-    bsrScore * 0.15 +
+    bsrScore * 0.1 +
     antiMonopolyScore * 0.2 +
     competitionEaseScore * 0.15 +
-    ratingWindowScore * 0.15 +
+    ratingWindowScore * 0.2 +
     reviewBaseScore * 0.1;
 
-  const risk = riskMultiplier(row.overallRisk);
-  const confidence = confidenceMultiplier(row);
-  const penalty = overheatingPenalty(row);
   const override = manualOverride(row.initialConclusion);
+  const riskPenalty = fixedRiskPenalty(row.overallRisk);
 
-  const finalScore = eligibility.eligible
-    ? clamp((rawScore + override - penalty) * risk * confidence)
-    : 0;
-
+  const finalScore = eligibility.eligible ? clamp(rawScore + override - riskPenalty) : 0;
   const classification = classifyLevel(finalScore);
+
+  let suggestedStatus: WorkflowStatus = eligibility.eligible ? classification.status : "淘汰库";
+
+  if (!eligibility.eligible) {
+    suggestedStatus = "淘汰库";
+  } else if (quality.needsMoreEvidence || quality.isStale) {
+    suggestedStatus = "待补证";
+  } else if (row.overallRisk === "高" && suggestedStatus === "供应链核价") {
+    suggestedStatus = "观察池";
+  }
 
   const breakdown: ScoreBreakdown = {
     reviewGrowthScore,
@@ -209,18 +218,17 @@ export function calculateRps(row: ProductRow): RpsResult {
     ratingWindowScore,
     reviewBaseScore,
     rawScore: Number(rawScore.toFixed(2)),
-    riskMultiplier: risk,
-    confidenceMultiplier: confidence,
-    overheatingPenalty: penalty,
+    riskPenalty,
     manualOverride: override,
     finalScore: Number(finalScore.toFixed(2)),
   };
 
   return {
     eligibility,
+    dataQuality: quality,
     score: breakdown,
     level: classification.level,
-    suggestedStatus: eligibility.eligible ? classification.status : "淘汰库",
+    suggestedStatus,
     falsePositiveTags: falsePositiveTags(row),
   };
 }

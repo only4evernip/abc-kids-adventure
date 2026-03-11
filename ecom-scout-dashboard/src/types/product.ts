@@ -7,8 +7,6 @@ export type WorkflowStatus =
   | "观察池"
   | "待补证"
   | "供应链核价"
-  | "打样验证"
-  | "小单测试"
   | "淘汰库";
 
 export interface RawCsvRow {
@@ -22,6 +20,7 @@ export interface ProductRow {
   keyword: string;
   nicheDirection: string;
   productDirection: string;
+  bigCategory?: string;
   asin?: string;
   title?: string;
   brand?: string;
@@ -56,17 +55,32 @@ export interface ScoreBreakdown {
   ratingWindowScore: number;
   reviewBaseScore: number;
   rawScore: number;
-  riskMultiplier: number;
-  confidenceMultiplier: number;
-  overheatingPenalty: number;
+  riskPenalty: number;
   manualOverride: number;
   finalScore: number;
+}
+
+export interface DataQualityResult {
+  missingCoreFieldCount: number;
+  needsMoreEvidence: boolean;
+  isStale: boolean;
+  ageDays: number;
 }
 
 export interface RpsResult {
   eligibility: EligibilityResult;
   score: ScoreBreakdown;
+  dataQuality: DataQualityResult;
   level: RpsLevel;
   suggestedStatus: WorkflowStatus;
   falsePositiveTags: string[];
+}
+
+export interface ProductRecord extends ProductRow {
+  id: string;
+  importBatchId: string;
+  importedAt: string;
+  workflowStatus: WorkflowStatus;
+  notes?: string;
+  rps: RpsResult;
 }

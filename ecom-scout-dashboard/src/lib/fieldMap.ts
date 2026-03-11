@@ -31,12 +31,18 @@ export const REQUIRED_COLUMNS = [
   "平台站点",
   "关键词",
   "产品方向",
-  "当前价格",
-  "当前BSR",
   "当前评分",
   "评论数",
   "30天评论增长",
   "头部垄断程度",
   "竞争激烈度",
   "总体风险等级",
+] as const;
+
+export const RECOMMENDED_COLUMNS = [
+  "当前价格",
+  "当前BSR",
+  "核心卖点",
+  "高频差评点",
+  "高频想要点",
 ] as const;
