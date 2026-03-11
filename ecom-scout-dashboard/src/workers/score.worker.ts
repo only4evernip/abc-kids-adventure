@@ -68,7 +68,7 @@ function normalizeUrlPath(value?: string) {
   }
 }
 
-function stableProductId(row: ProductRow) {
+export function stableProductId(row: ProductRow) {
   const asin = normalizeText(row.asin);
   const urlPath = normalizeUrlPath(row.productUrl);
   const title = normalizeText(row.title).slice(0, 120);
@@ -79,7 +79,7 @@ function stableProductId(row: ProductRow) {
   return `prd_${hashString(base)}`;
 }
 
-function buildRecord(row: ProductRow, batchId: string): ProductRecord {
+export function buildRecord(row: ProductRow, batchId: string): ProductRecord {
   const importedAt = new Date().toISOString();
   const rps = calculateRps(row);
 
@@ -96,7 +96,7 @@ function buildRecord(row: ProductRow, batchId: string): ProductRecord {
   };
 }
 
-function mergeImportedRecord(existing: ProductRecord | undefined, incoming: ProductRecord): { record: ProductRecord; stats: ImportStats } {
+export function mergeImportedRecord(existing: ProductRecord | undefined, incoming: ProductRecord): { record: ProductRecord; stats: ImportStats } {
   if (!existing) {
     return {
       record: incoming,
@@ -133,7 +133,7 @@ function mergeImportedRecord(existing: ProductRecord | undefined, incoming: Prod
   };
 }
 
-function emptyImportStats(): ImportStats {
+export function emptyImportStats(): ImportStats {
   return {
     insertedCount: 0,
     updatedCount: 0,
@@ -142,7 +142,7 @@ function emptyImportStats(): ImportStats {
   };
 }
 
-function mergeStats(base: ImportStats, next: ImportStats): ImportStats {
+export function mergeStats(base: ImportStats, next: ImportStats): ImportStats {
   return {
     insertedCount: base.insertedCount + next.insertedCount,
     updatedCount: base.updatedCount + next.updatedCount,
@@ -163,7 +163,7 @@ async function bulkSave(records: ProductRecord[]) {
   return stats;
 }
 
-function summarizeParseError(rowNumber: number, raw: Record<string, unknown>, issues: { path: (string | number)[]; message: string }[]): ImportErrorItem {
+export function summarizeParseError(rowNumber: number, raw: Record<string, unknown>, issues: { path: (string | number)[]; message: string }[]): ImportErrorItem {
   const firstIssue = issues[0];
   const field = firstIssue?.path?.[0] != null ? String(firstIssue.path[0]) : undefined;
   const valuePreview = field ? String(raw[field] ?? "").slice(0, 80) : undefined;
@@ -194,6 +194,7 @@ function parseCsvFile(file: File): Promise<Record<string, unknown>[]> {
   });
 }
 
+if (typeof self !== "undefined") {
 self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
   const { file, batchId } = event.data;
 
@@ -258,3 +259,4 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
     } satisfies ScoreWorkerOutput);
   }
 };
+}
