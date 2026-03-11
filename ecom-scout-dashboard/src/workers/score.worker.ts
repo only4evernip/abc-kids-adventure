@@ -9,6 +9,13 @@ export interface ScoreWorkerInput {
   file: File;
 }
 
+export interface ImportErrorItem {
+  rowNumber: number;
+  reason: string;
+  field?: string;
+  valuePreview?: string;
+}
+
 export type ScoreWorkerOutput =
   | {
       type: "progress";
@@ -23,6 +30,7 @@ export type ScoreWorkerOutput =
       batchId: string;
       count: number;
       errorCount: number;
+      errorItems: ImportErrorItem[];
     }
   | {
       type: "error";
@@ -107,6 +115,19 @@ async function bulkSave(records: ProductRecord[]) {
   await db.products.bulkPut(mergedRecords);
 }
 
+function summarizeParseError(rowNumber: number, raw: Record<string, unknown>, issues: { path: (string | number)[]; message: string }[]): ImportErrorItem {
+  const firstIssue = issues[0];
+  const field = firstIssue?.path?.[0] != null ? String(firstIssue.path[0]) : undefined;
+  const valuePreview = field ? String(raw[field] ?? "").slice(0, 80) : undefined;
+
+  return {
+    rowNumber,
+    field,
+    valuePreview,
+    reason: issues.map((issue) => issue.message).join("；"),
+  };
+}
+
 function parseCsvFile(file: File): Promise<Record<string, unknown>[]> {
   return new Promise((resolve, reject) => {
     Papa.parse<Record<string, unknown>>(file, {
@@ -134,6 +155,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
     let errorCount = 0;
     let saved = 0;
     const buffer: ProductRecord[] = [];
+    const errorItems: ImportErrorItem[] = [];
 
     for (let index = 0; index < rows.length; index += 1) {
       const raw = rows[index];
@@ -141,6 +163,9 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
 
       if (!result.success) {
         errorCount += 1;
+        if (errorItems.length < 20) {
+          errorItems.push(summarizeParseError(index + 2, raw, result.error.issues));
+        }
       } else {
         const normalized = toProductRow(result.data);
         buffer.push(buildRecord(normalized, batchId));
@@ -173,6 +198,7 @@ self.onmessage = async (event: MessageEvent<ScoreWorkerInput>) => {
       batchId,
       count: saved,
       errorCount,
+      errorItems,
     } satisfies ScoreWorkerOutput);
   } catch (error) {
     self.postMessage({

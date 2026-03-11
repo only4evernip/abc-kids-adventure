@@ -9,11 +9,19 @@ export interface FilterState {
   workflowStatus?: string;
 }
 
+export interface ImportErrorItem {
+  rowNumber: number;
+  reason: string;
+  field?: string;
+  valuePreview?: string;
+}
+
 interface ImportMeta {
   importedAt?: string;
   rowCount: number;
   errorCount: number;
   currentBatchId?: string;
+  errorItems: ImportErrorItem[];
 }
 
 interface ScoutState {
@@ -43,6 +51,7 @@ export const useScoutStore = create<ScoutState>((set) => ({
     errorCount: 0,
     currentBatchId: undefined,
     importedAt: undefined,
+    errorItems: [],
   },
   setFilters: (patch) => set((state) => ({ filters: { ...state.filters, ...patch } })),
   resetFilters: () => set(() => ({ filters: {} })),

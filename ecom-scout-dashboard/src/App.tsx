@@ -77,7 +77,7 @@ export default function App() {
 
   const handleClear = async () => {
     await db.products.clear();
-    setImportMeta({ currentBatchId: undefined, importedAt: undefined, rowCount: 0, errorCount: 0 });
+    setImportMeta({ currentBatchId: undefined, importedAt: undefined, rowCount: 0, errorCount: 0, errorItems: [] });
     setImportProgress(0);
     selectProduct(undefined);
     setDetailDrawerOpen(false);
@@ -96,7 +96,7 @@ export default function App() {
     const text = await file.text();
     const payload = JSON.parse(text);
     const count = await importSessionPayload(payload);
-    setImportMeta({ currentBatchId: "session-import", importedAt: new Date().toISOString(), rowCount: count, errorCount: 0 });
+    setImportMeta({ currentBatchId: "session-import", importedAt: new Date().toISOString(), rowCount: count, errorCount: 0, errorItems: [] });
     setLastMessage(`已导入 Session：${count} 条记录`);
   };
 
@@ -120,6 +120,7 @@ export default function App() {
         rowCount={importMeta.rowCount}
         errorCount={importMeta.errorCount}
         lastMessage={lastMessage}
+        errorItems={importMeta.errorItems}
         onImportFile={(file) => {
           if (file) void importFile(file);
         }}
