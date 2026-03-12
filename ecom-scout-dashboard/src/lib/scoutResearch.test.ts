@@ -35,6 +35,9 @@ describe("normalizeResearchSummary", () => {
           summary: "People think the category is crowded.",
         },
       ],
+      preliminaryDecision: "watch",
+      reasonSummary: "需求真实，但竞争不轻。",
+      nextStep: "继续深挖舒适度差异化",
     };
 
     const summary = normalizeResearchSummary(draft);
@@ -79,6 +82,9 @@ describe("normalizeResearchSummary", () => {
           summary: "Category looks crowded.",
         },
       ],
+      preliminaryDecision: "drop",
+      reasonSummary: "噪音大且证据质量不稳。",
+      nextStep: "换更干净的信息源再看",
     };
 
     const summary = normalizeResearchSummary(draft);
@@ -110,6 +116,9 @@ describe("normalizeResearchSummary", () => {
       painPointEvidence: [],
       risks: [],
       riskEvidence: [],
+      preliminaryDecision: "watch",
+      reasonSummary: "证据不完整。",
+      nextStep: "补抓有效来源",
     };
 
     expect(() => normalizeResearchSummary(draft)).toThrow("无效的 research evidence：缺少 sourceName 或 sourceUrl");

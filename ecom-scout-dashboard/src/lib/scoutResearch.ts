@@ -18,6 +18,12 @@ export interface ScoutResearchDraft {
   painPointEvidence: ScoutResearchDraftEvidence[];
   risks: string[];
   riskEvidence: ScoutResearchDraftEvidence[];
+  opportunities?: string[];
+  preliminaryDecision: "go-deeper" | "watch" | "drop";
+  reasonSummary: string;
+  nextStep: string;
+  notes?: string;
+  tags?: string[];
 }
 
 export interface NormalizedResearchSummary {
