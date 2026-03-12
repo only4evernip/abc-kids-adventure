@@ -42,7 +42,10 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
         header: "产品方向",
         cell: ({ row }) => (
           <div>
-            <div>{row.original.productDirection}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <span>{row.original.productDirection}</span>
+              {row.original.scoutMeta ? <span style={scoutBadgeStyle}>💡 侦察引入</span> : null}
+            </div>
             <div style={{ color: "#666", fontSize: 12 }}>{row.original.bigCategory || row.original.nicheDirection || "-"}</div>
           </div>
         ),
@@ -237,4 +240,16 @@ const td: CSSProperties = {
   padding: "12px 10px",
   verticalAlign: "top",
   overflow: "hidden",
+};
+
+const scoutBadgeStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "2px 8px",
+  borderRadius: 999,
+  fontSize: 12,
+  lineHeight: 1.6,
+  background: "#fff7e6",
+  color: "#ad6800",
+  whiteSpace: "nowrap",
 };

@@ -134,9 +134,6 @@ export function scoutCardToProductRecord(card: ScoutCard, batchId = "scout-card-
   const importedAt = new Date().toISOString();
   const rps = calculateRps(row);
   const workflowStatus = card.workbench.workflowStatus || decisionToWorkflowStatus(card.decision.preliminaryDecision);
-  const tags = (card.workbench.tags || []).join(" / ");
-  const evidenceSummary = card.evidence.map((item) => `- ${item.source}: ${item.title} | ${item.url}`).join("\n");
-
   return {
     ...row,
     id: stableScoutCardId(card),
@@ -145,9 +142,20 @@ export function scoutCardToProductRecord(card: ScoutCard, batchId = "scout-card-
     workflowStatus,
     workflowStatusSource: "manual",
     workflowStatusUpdatedAt: importedAt,
-    notes: [card.workbench.notes, tags ? `标签：${tags}` : "", evidenceSummary ? `证据：\n${evidenceSummary}` : ""]
-      .filter(Boolean)
-      .join("\n\n"),
+    notes: card.workbench.notes || "",
+    scoutMeta: {
+      cardId: card.cardId,
+      demandSignal: card.signals.demandSignal,
+      competitionSignal: card.signals.competitionSignal,
+      confidence: card.signals.confidence,
+      painPoints: card.insights.painPoints,
+      opportunities: card.insights.opportunities || [],
+      risks: card.insights.risks,
+      preliminaryDecision: card.decision.preliminaryDecision,
+      reasonSummary: card.decision.reasonSummary,
+      evidence: card.evidence,
+      tags: card.workbench.tags || [],
+    },
     rps: {
       ...rps,
       suggestedStatus: workflowStatus,

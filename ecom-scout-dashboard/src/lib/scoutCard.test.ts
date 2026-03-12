@@ -14,7 +14,9 @@ describe("scoutCard import", () => {
     expect(record.market).toBe(card.topic.market);
     expect(record.workflowStatusSource).toBe("manual");
     expect(record.notes).toContain("优先排查是否有规避医疗器械认证的侧翼打法");
-    expect(record.notes).toContain("Wirecutter");
+    expect(record.scoutMeta?.cardId).toBe(example.cardId);
+    expect(record.scoutMeta?.evidence[0]?.source).toBe("Wirecutter");
+    expect(record.scoutMeta?.painPoints).toContain("佩戴不舒服");
     expect(record.rps.falsePositiveTags).toContain("问题驱动型需求");
   });
 });

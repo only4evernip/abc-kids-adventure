@@ -25,6 +25,34 @@ function badgeStyle(bg: string, color = "#111"): CSSProperties {
   };
 }
 
+function signalLabel(value: "high" | "medium-high" | "medium" | "low") {
+  switch (value) {
+    case "high":
+      return "高";
+    case "medium-high":
+      return "中高";
+    case "medium":
+      return "中";
+    default:
+      return "低";
+  }
+}
+
+function signalBadge(value: "high" | "medium-high" | "medium" | "low", kind: "demand" | "competition" | "confidence"): CSSProperties {
+  const colorMap = {
+    high: kind === "competition" ? ["#fff1f0", "#cf1322"] : ["#f6ffed", "#389e0d"],
+    "medium-high": ["#fff7e6", "#d46b08"],
+    medium: ["#fffbe6", "#ad6800"],
+    low: ["#f5f5f5", "#666"],
+  } as const;
+
+  const [bg, color] = colorMap[value];
+  return {
+    ...badgeStyle(bg, color),
+    marginBottom: 0,
+  };
+}
+
 export function DetailDrawer({ row, open, onClose, onSave }: Props) {
   const [status, setStatus] = useState<WorkflowStatus>("待评估");
   const [notes, setNotes] = useState("");
@@ -40,6 +68,7 @@ export function DetailDrawer({ row, open, onClose, onSave }: Props) {
 
   const statusChanged = row ? row.workflowStatus !== row.rps.suggestedStatus : false;
   const isManual = row?.workflowStatusSource === "manual";
+  const isScoutCard = Boolean(row?.scoutMeta);
 
   return (
     <aside style={panelStyle}>
@@ -53,7 +82,10 @@ export function DetailDrawer({ row, open, onClose, onSave }: Props) {
       ) : (
         <div>
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>{row.productDirection}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>{row.productDirection}</div>
+              {isScoutCard ? <span style={badgeStyle("#fff7e6", "#ad6800")}>💡 侦察引入</span> : null}
+            </div>
             <div style={{ color: "#666", marginTop: 4 }}>{row.keyword}</div>
           </div>
 
@@ -81,6 +113,70 @@ export function DetailDrawer({ row, open, onClose, onSave }: Props) {
               保存后会把该记录标记为“人工接管”，后续导入不会再覆盖当前状态。
             </div>
           </div>
+
+          {isScoutCard && row.scoutMeta ? (
+            <div style={detailBlock}>
+              <strong>侦察洞察（Scout Insights）</strong>
+              <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div>
+                    <span style={labelSmall}>需求信号：</span>
+                    <span style={signalBadge(row.scoutMeta.demandSignal, "demand")}>{signalLabel(row.scoutMeta.demandSignal)}</span>
+                  </div>
+                  <div>
+                    <span style={labelSmall}>竞争信号：</span>
+                    <span style={signalBadge(row.scoutMeta.competitionSignal, "competition")}>{signalLabel(row.scoutMeta.competitionSignal)}</span>
+                  </div>
+                  <div>
+                    <span style={labelSmall}>结论置信度：</span>
+                    <span style={signalBadge(row.scoutMeta.confidence, "confidence")}>{signalLabel(row.scoutMeta.confidence)}</span>
+                  </div>
+                  <div>
+                    <span style={labelSmall}>初步判断：</span>
+                    <strong>{row.scoutMeta.preliminaryDecision}</strong>
+                  </div>
+                  <div style={{ color: "#444" }}>{row.scoutMeta.reasonSummary}</div>
+                </div>
+
+                <div>
+                  <div style={labelSmall}>用户痛点</div>
+                  <ul style={ulStyle}>
+                    {row.scoutMeta.painPoints.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </div>
+
+                {row.scoutMeta.opportunities.length > 0 && (
+                  <div>
+                    <div style={labelSmall}>微创新机会</div>
+                    <ul style={ulStyle}>
+                      {row.scoutMeta.opportunities.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                <div>
+                  <div style={labelSmall}>风险提示</div>
+                  <ul style={ulStyle}>
+                    {row.scoutMeta.risks.map((item) => <li key={item}>{item}</li>)}
+                  </ul>
+                </div>
+
+                <div>
+                  <div style={labelSmall}>证据链接</div>
+                  <ul style={ulStyle}>
+                    {row.scoutMeta.evidence.map((item) => (
+                      <li key={`${item.source}-${item.url}`}>
+                        <a href={item.url} target="_blank" rel="noreferrer" style={{ color: "#1677ff", textDecoration: "none" }}>
+                          {item.source} · {item.title}
+                        </a>
+                        <div style={{ color: "#666", fontSize: 12 }}>{item.summary}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           <div style={detailBlock}>
             <strong>本地备注</strong>

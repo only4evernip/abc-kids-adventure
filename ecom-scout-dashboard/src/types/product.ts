@@ -86,5 +86,24 @@ export interface ProductRecord extends ProductRow {
   workflowStatusSource: WorkflowStatusSource;
   workflowStatusUpdatedAt?: string;
   notes?: string;
+  scoutMeta?: {
+    cardId: string;
+    demandSignal: "high" | "medium-high" | "medium" | "low";
+    competitionSignal: "high" | "medium-high" | "medium" | "low";
+    confidence: "high" | "medium" | "low";
+    painPoints: string[];
+    opportunities: string[];
+    risks: string[];
+    preliminaryDecision: "go-deeper" | "watch" | "drop";
+    reasonSummary: string;
+    evidence: {
+      type: "reddit" | "article" | "forum" | "review" | "marketplace" | "video" | "other";
+      source: string;
+      title: string;
+      url: string;
+      summary: string;
+    }[];
+    tags: string[];
+  };
   rps: RpsResult;
 }
