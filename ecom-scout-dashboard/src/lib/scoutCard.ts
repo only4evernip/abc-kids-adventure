@@ -13,6 +13,27 @@ export interface ScoutEvidenceItem {
   summary: string;
 }
 
+export interface ScoutResearchSummary {
+  keyword: string;
+  market: "US" | "CA";
+  productDirection: string;
+  platformFocus?: string[];
+  language?: string;
+  demandSignal: ScoutSignalLevel;
+  competitionSignal: ScoutSignalLevel;
+  demandEvidence: ScoutEvidenceItem[];
+  painPoints: string[];
+  painPointEvidence: ScoutEvidenceItem[];
+  risks: string[];
+  riskEvidence: ScoutEvidenceItem[];
+  opportunities?: string[];
+  preliminaryDecision: ScoutDecision;
+  reasonSummary: string;
+  nextStep: string;
+  notes?: string;
+  tags?: string[];
+}
+
 export interface ScoutCard {
   schemaVersion: "scout-card.v1";
   cardId: string;
@@ -91,6 +112,57 @@ function decisionToWorkflowStatus(decision: ScoutDecision): WorkflowStatus {
     default:
       return "待评估";
   }
+}
+
+export function buildScoutCardFromResearch(summary: ScoutResearchSummary): ScoutCard {
+  const hasDemandEvidence = summary.demandEvidence.length > 0;
+  const hasPainEvidence = summary.painPoints.length > 0 && summary.painPointEvidence.length > 0;
+  const hasRiskEvidence = summary.risks.length > 0 && summary.riskEvidence.length > 0;
+  const evidenceComplete = hasDemandEvidence && hasPainEvidence && hasRiskEvidence;
+
+  const confidence: ScoutConfidenceLevel = evidenceComplete ? "high" : "low";
+  const preliminaryDecision: ScoutDecision = evidenceComplete ? summary.preliminaryDecision : "watch";
+  const now = new Date().toISOString();
+
+  const card: ScoutCard = {
+    schemaVersion: "scout-card.v1",
+    cardId: "pending",
+    createdAt: now,
+    updatedAt: now,
+    topic: {
+      keyword: summary.keyword,
+      productDirection: summary.productDirection,
+      market: summary.market,
+      platformFocus: summary.platformFocus || [],
+      language: summary.language || "en",
+    },
+    signals: {
+      demandSignal: summary.demandSignal,
+      competitionSignal: summary.competitionSignal,
+      confidence,
+    },
+    insights: {
+      painPoints: summary.painPoints,
+      risks: summary.risks,
+      opportunities: summary.opportunities || [],
+    },
+    decision: {
+      preliminaryDecision,
+      nextStep: summary.nextStep,
+      reasonSummary: evidenceComplete ? summary.reasonSummary : `${summary.reasonSummary}（证据不足，先进入 watch）`,
+    },
+    evidence: [...summary.demandEvidence, ...summary.painPointEvidence, ...summary.riskEvidence],
+    workbench: {
+      workflowStatus: decisionToWorkflowStatus(preliminaryDecision),
+      notes: summary.notes || "",
+      tags: summary.tags || [],
+    },
+  };
+
+  return {
+    ...card,
+    cardId: stableScoutCardId(card),
+  };
 }
 
 export function scoutCardToProductRow(card: ScoutCard): ProductRow {
