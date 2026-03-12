@@ -16,12 +16,13 @@ interface Props {
   sorting: SortingState;
   setSorting: (updater: SortingState) => void;
   onSelect: (id: string) => void;
+  onExportScoutBatch?: (rows: ProductRecord[]) => void;
 }
 
 const GRID_TEMPLATE = "110px minmax(240px,1.3fr) minmax(220px,1.1fr) 90px 110px 90px minmax(180px,1fr) 180px";
 const ROW_HEIGHT = 74;
 
-export function ProductTable({ rows, selectedProductId, sorting, setSorting, onSelect }: Props) {
+export function ProductTable({ rows, selectedProductId, sorting, setSorting, onSelect, onExportScoutBatch }: Props) {
   const parentRef = useRef<HTMLDivElement | null>(null);
 
   const columns = useMemo<ColumnDef<ProductRecord>[]>(
@@ -89,6 +90,8 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
     []
   );
 
+  const scoutRows = useMemo(() => rows.filter((row) => Boolean(row.scoutMeta)), [rows]);
+
   const table = useReactTable({
     data: rows,
     columns,
@@ -118,7 +121,22 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
           <h2 style={{ margin: 0 }}>发现矩阵</h2>
           <div style={{ color: "#666", fontSize: 13 }}>当前结果 {rows.length} 条，支持排序、虚拟滚动与点击查看详情。</div>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12, color: "#555" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: "#555" }}>
+          {onExportScoutBatch ? (
+            <button
+              onClick={() => onExportScoutBatch(scoutRows)}
+              disabled={scoutRows.length === 0}
+              style={{
+                padding: "8px 12px",
+                borderRadius: 8,
+                border: "1px solid #d9d9d9",
+                background: scoutRows.length === 0 ? "#f5f5f5" : "#fff",
+                cursor: scoutRows.length === 0 ? "not-allowed" : "pointer",
+              }}
+            >
+              批量导出同步 JSON（{scoutRows.length}）
+            </button>
+          ) : null}
           <span style={legendBadge("#f0f5ff", "#2f54eb")}>人工接管</span>
           <span style={legendBadge("#fffbe6", "#faad14")}>状态分叉</span>
           <span style={legendBadge("#f6ffed", "#52c41a")}>高分待处理</span>

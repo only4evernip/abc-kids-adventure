@@ -206,6 +206,22 @@ export default function App() {
     setLastMessage(`已导出飞书同步 JSON：${row.productDirection}`);
   };
 
+  const handleExportScoutBatch = (rows: ProductRecord[]) => {
+    const cards = rows
+      .map((row) => ({ row, card: productRecordToScoutCard(row) }))
+      .filter((item): item is { row: ProductRecord; card: ScoutCard } => Boolean(item.card));
+
+    if (cards.length === 0) {
+      setLastMessage("当前列表没有可导出的侦察卡记录");
+      return;
+    }
+
+    const payload = cards.map(({ card }) => scoutCardToFeishuRecord(card));
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    downloadJson(`sync_scout_batch_${stamp}.json`, payload);
+    setLastMessage(`已批量导出飞书同步 JSON：${cards.length} 条`);
+  };
+
   return (
     <main
       style={{
@@ -285,6 +301,7 @@ export default function App() {
             selectProduct(id);
             setDetailDrawerOpen(true);
           }}
+          onExportScoutBatch={handleExportScoutBatch}
         />
 
         <DetailDrawer
