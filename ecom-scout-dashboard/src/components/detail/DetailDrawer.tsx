@@ -7,6 +7,9 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (id: string, patch: { workflowStatus: WorkflowStatus; notes: string }) => void;
+  onSaveAndNext?: (id: string, patch: { workflowStatus: WorkflowStatus; notes: string }) => void;
+  showSaveAndNext?: boolean;
+  isLastQueueItem?: boolean;
   onExportScoutSync?: (row: ProductRecord) => void;
 }
 
@@ -54,7 +57,7 @@ function signalBadge(value: "high" | "medium-high" | "medium" | "low", kind: "de
   };
 }
 
-export function DetailDrawer({ row, open, onClose, onSave, onExportScoutSync }: Props) {
+export function DetailDrawer({ row, open, onClose, onSave, onSaveAndNext, showSaveAndNext, isLastQueueItem, onExportScoutSync }: Props) {
   const [status, setStatus] = useState<WorkflowStatus>("待评估");
   const [notes, setNotes] = useState("");
 
@@ -184,6 +187,11 @@ export function DetailDrawer({ row, open, onClose, onSave, onExportScoutSync }: 
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} style={{ ...inputStyle, resize: "vertical" }} placeholder="这里写本地判断、供应链线索、人工备注..." />
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
               <button onClick={() => onSave(row.id, { workflowStatus: status, notes })} style={smallButton}>保存状态与备注</button>
+              {showSaveAndNext && onSaveAndNext ? (
+                <button onClick={() => onSaveAndNext(row.id, { workflowStatus: status, notes })} style={smallButton}>
+                  {isLastQueueItem ? "保存并完成队列" : "保存并处理下一条"}
+                </button>
+              ) : null}
               {isScoutCard && onExportScoutSync ? (
                 <button onClick={() => onExportScoutSync({ ...row, notes, workflowStatus: status })} style={smallButton}>导出飞书同步 JSON</button>
               ) : null}

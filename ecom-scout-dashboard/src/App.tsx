@@ -136,6 +136,14 @@ export default function App() {
     [filteredRows, selectedProductId]
   );
 
+  const selectedRowIndex = useMemo(
+    () => filteredRows.findIndex((row) => row.id === selectedProductId),
+    [filteredRows, selectedProductId]
+  );
+
+  const showSaveAndNext = Boolean(filters.queueOnly && selectedRow);
+  const isLastQueueItem = showSaveAndNext && selectedRowIndex >= 0 && selectedRowIndex === filteredRows.length - 1;
+
   useEffect(() => {
     if (selectedProductId && !selectedRow) {
       selectProduct(undefined);
@@ -206,6 +214,24 @@ export default function App() {
   const handleSaveDetail = async (id: string, patch: { workflowStatus: WorkflowStatus; notes: string }) => {
     await updateProductRecord(id, patch);
     setLastMessage(`已保存：${patch.workflowStatus}${patch.notes ? " + 备注" : ""}`);
+  };
+
+  const handleSaveAndNext = async (id: string, patch: { workflowStatus: WorkflowStatus; notes: string }) => {
+    const currentIndex = filteredRows.findIndex((row) => row.id === id);
+    const nextCandidate = currentIndex >= 0 ? filteredRows[currentIndex + 1] : undefined;
+
+    await updateProductRecord(id, patch);
+
+    if (nextCandidate) {
+      selectProduct(nextCandidate.id);
+      setDetailDrawerOpen(true);
+      setLastMessage(`已保存，继续处理下一条：${nextCandidate.productDirection}`);
+      return;
+    }
+
+    selectProduct(undefined);
+    setDetailDrawerOpen(false);
+    setLastMessage("🎉 今日待处理队列已清空！");
   };
 
   const handleExportScoutSync = (row: ProductRecord) => {
@@ -324,6 +350,9 @@ export default function App() {
           open={detailDrawerOpen}
           onClose={() => setDetailDrawerOpen(false)}
           onSave={handleSaveDetail}
+          onSaveAndNext={handleSaveAndNext}
+          showSaveAndNext={showSaveAndNext}
+          isLastQueueItem={Boolean(isLastQueueItem)}
           onExportScoutSync={handleExportScoutSync}
         />
       </section>
