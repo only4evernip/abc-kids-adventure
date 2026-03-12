@@ -19,6 +19,7 @@ interface Props {
   };
   onImportFile: (file?: File | null) => void;
   onImportSample: () => void;
+  onImportScoutCardFile: (file?: File | null) => void;
   onImportSessionFile: (file?: File | null) => void;
   onExportSession: () => void;
   onClear: () => void;
@@ -101,6 +102,7 @@ export function ImportSection(props: Props) {
     stats,
     onImportFile,
     onImportSample,
+    onImportScoutCardFile,
     onImportSessionFile,
     onExportSession,
     onClear,
@@ -117,6 +119,11 @@ export function ImportSection(props: Props) {
         </label>
 
         <button onClick={onImportSample} style={actionButton}>导入内置样本</button>
+
+        <label style={actionLabel}>
+          <span>导入侦察卡 JSON</span>
+          <input type="file" accept=".json,application/json" style={{ display: "none" }} onChange={(e) => onImportScoutCardFile(e.target.files?.[0])} />
+        </label>
 
         <label style={actionLabel}>
           <span>导入 Session JSON</span>

@@ -3,6 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import type { SortingState } from "@tanstack/react-table";
 import { db, exportSessionPayload, importSessionPayload, updateProductRecord } from "./lib/db";
 import { queryProducts } from "./lib/productQuery";
+import { parseScoutCard, scoutCardToProductRecord } from "./lib/scoutCard";
 import { useScoutStore } from "./store/useScoutStore";
 import type { ProductRecord, WorkflowStatus } from "./types/product";
 import { useScoreWorker } from "./hooks/useScoreWorker";
@@ -112,6 +113,25 @@ export default function App() {
     setLastMessage(`已导出 Session：${payload.products.length} 条记录`);
   };
 
+  const handleImportScoutCardFile = async (file?: File | null) => {
+    if (!file) return;
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    const card = parseScoutCard(payload);
+    const record = scoutCardToProductRecord(card);
+    await db.products.put(record);
+    setImportMeta({
+      currentBatchId: "scout-card-import",
+      importedAt: new Date().toISOString(),
+      phase: "done",
+      rowCount: 1,
+      errorCount: 0,
+      errorItems: [],
+      stats: { insertedCount: 1, updatedCount: 0, preservedManualStatusCount: 0, preservedNotesCount: 0 },
+    });
+    setLastMessage(`已导入侦察卡：${card.topic.productDirection}`);
+  };
+
   const handleImportSessionFile = async (file?: File | null) => {
     if (!file) return;
     const text = await file.text();
@@ -168,6 +188,9 @@ export default function App() {
         }}
         onImportSample={() => {
           void importSample();
+        }}
+        onImportScoutCardFile={(file) => {
+          void handleImportScoutCardFile(file);
         }}
         onImportSessionFile={(file) => {
           void handleImportSessionFile(file);
