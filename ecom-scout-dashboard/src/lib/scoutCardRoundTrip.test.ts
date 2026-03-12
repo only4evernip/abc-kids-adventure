@@ -44,10 +44,10 @@ describe("scout card workbench export path", () => {
     };
 
     const payload = scoutCardToFeishuRecord(reconstructed);
-    expect(payload.cardId).toBe(example.cardId);
-    expect(payload.keyword).toBe(example.topic.keyword);
-    expect(payload.workflowStatus).toBe(record.workflowStatus);
-    expect(payload.notes).toBe(example.workbench.notes);
-    expect(payload.evidenceLinks).toContain("Wirecutter");
+    expect(payload["Card ID"]).toBe(example.cardId);
+    expect(payload["关键词"]).toBe(example.topic.keyword);
+    expect(payload["工作流状态"]).toBe(record.workflowStatus);
+    expect(payload["本地备注"]).toBe(example.workbench.notes);
+    expect(payload["证据链接"]).toContain("Wirecutter");
   });
 });

@@ -8,15 +8,15 @@ describe("scoutCardToFeishuRecord", () => {
     const card = parseScoutCard(example);
     const record = scoutCardToFeishuRecord(card);
 
-    expect(record.cardId).toBe(example.cardId);
-    expect(record.keyword).toBe(example.topic.keyword);
-    expect(record.productDirection).toBe(example.topic.productDirection);
-    expect(record.market).toBe(example.topic.market);
-    expect(record.demandSignal).toBe(example.signals.demandSignal);
-    expect(record.painPoints).toContain("佩戴不舒服");
-    expect(record.tags).toContain("问题驱动型需求");
-    expect(record.evidenceLinks).toContain("Wirecutter");
-    expect(record.evidenceSummary).toContain("赛道成熟");
-    expect(record.workflowStatus).toBe(example.workbench.workflowStatus);
+    expect(record["Card ID"]).toBe(example.cardId);
+    expect(record["关键词"]).toBe(example.topic.keyword);
+    expect(record["产品方向"]).toBe(example.topic.productDirection);
+    expect(record["市场"]).toBe(example.topic.market);
+    expect(record["需求信号"]).toBe(example.signals.demandSignal);
+    expect(record["用户痛点"]).toContain("佩戴不舒服");
+    expect(record["标签"]).toContain("问题驱动型需求");
+    expect(record["证据链接"]).toContain("Wirecutter");
+    expect(record["证据摘要"]).toContain("赛道成熟");
+    expect(record["工作流状态"]).toBe(example.workbench.workflowStatus);
   });
 });
