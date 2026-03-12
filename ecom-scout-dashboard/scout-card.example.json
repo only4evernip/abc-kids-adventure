@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "scout-card.v1",
+  "cardId": "scout_20260312_anti-snoring-device",
+  "createdAt": "2026-03-12T09:30:00+08:00",
+  "updatedAt": "2026-03-12T09:40:00+08:00",
+  "topic": {
+    "keyword": "anti snoring device",
+    "productDirection": "anti snoring mouthpiece",
+    "market": "US",
+    "platformFocus": [
+      "Amazon US"
+    ],
+    "language": "en"
+  },
+  "signals": {
+    "demandSignal": "medium-high",
+    "competitionSignal": "high",
+    "confidence": "medium"
+  },
+  "insights": {
+    "painPoints": [
+      "佩戴不舒服",
+      "下巴疼",
+      "调节不稳",
+      "有效但戴不住"
+    ],
+    "risks": [
+      "成熟红海赛道",
+      "高预期高差评风险",
+      "合规敏感（如FDA 510k）"
+    ],
+    "opportunities": [
+      "更舒适的材质包边",
+      "更精密的微调适配",
+      "更小体积的女性/小口腔专款"
+    ]
+  },
+  "decision": {
+    "preliminaryDecision": "watch",
+    "nextStep": "拆细分方向，验证舒适度切口",
+    "reasonSummary": "需求真实但竞争极强，不建议直接做大词，适合继续做细分微创新侦察"
+  },
+  "evidence": [
+    {
+      "type": "article",
+      "source": "Wirecutter",
+      "title": "I Tried 6 Anti-Snoring Devices. The Smart Nora Worked Best.",
+      "url": "https://www.nytimes.com/wirecutter/blog/anti-snoring-devices/",
+      "summary": "赛道成熟，用户在舒适度和有效性之间权衡明显"
+    },
+    {
+      "type": "forum",
+      "source": "Well Trained Mind",
+      "title": "Mouth guard recs for snoring",
+      "url": "https://forums.welltrainedmind.com/topic/737296-mouth-guard-recs-for-snoring/",
+      "summary": "用户会主动寻找口腔装置推荐，说明需求真实且迫切"
+    }
+  ],
+  "workbench": {
+    "workflowStatus": "待评估",
+    "notes": "优先排查是否有规避医疗器械认证的侧翼打法",
+    "tags": [
+      "问题驱动型需求",
+      "舒适度生死线",
+      "高敏感赛道"
+    ]
+  }
+}
