@@ -101,6 +101,20 @@ export default function App() {
   );
 
   const totalCount = useLiveQuery(() => db.products.count(), [], 0);
+  const queueCount = useLiveQuery(
+    () =>
+      db.products
+        .toArray()
+        .then((rows) =>
+          rows.filter((row) => {
+            const systemHighScore = row.workflowStatusSource === "system" && row.rps.score.finalScore >= 80;
+            const freshScout = Boolean(row.scoutMeta) && row.workflowStatusSource !== "manual" && ["待评估", "观察池"].includes(row.workflowStatus);
+            return systemHighScore || freshScout;
+          }).length
+        ),
+    [],
+    0
+  );
 
   const marketOptions = useLiveQuery(async () => {
     const keys = await db.products.orderBy("market").uniqueKeys();
@@ -288,6 +302,7 @@ export default function App() {
           marketOptions={marketOptions}
           statusOptions={statusOptions}
           riskOptions={riskOptions}
+          queueCount={queueCount}
           setFilters={setFilters}
           resetFilters={resetFilters}
         />

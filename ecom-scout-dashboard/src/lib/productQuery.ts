@@ -10,10 +10,16 @@ function buildKeywordHaystack(row: ProductRecord) {
   return `${row.keyword} ${row.productDirection} ${row.title || ""}`.toLowerCase();
 }
 
+function isInContinueQueue(row: ProductRecord) {
+  const systemHighScore = row.workflowStatusSource === "system" && row.rps.score.finalScore >= 80;
+  const freshScout = Boolean(row.scoutMeta) && row.workflowStatusSource !== "manual" && ["待评估", "观察池"].includes(row.workflowStatus);
+  return systemHighScore || freshScout;
+}
+
 export async function queryProducts(filters: FilterState): Promise<ProductRecord[]> {
   const normalizedKeyword = normalizeKeyword(filters.keyword);
   const hasScoreFilter = filters.minScore != null || filters.maxScore != null;
-  const hasWorkflowFlags = Boolean(filters.manualOnly || filters.changedOnly || filters.reviewPriorityOnly);
+  const hasWorkflowFlags = Boolean(filters.manualOnly || filters.changedOnly || filters.reviewPriorityOnly || filters.queueOnly);
   const hasResidualFilter = Boolean(filters.risk || normalizedKeyword || hasScoreFilter || hasWorkflowFlags);
 
   let collection:
@@ -43,6 +49,7 @@ export async function queryProducts(filters: FilterState): Promise<ProductRecord
       const isNotAdvanced = ["待评估", "观察池", "待补证"].includes(row.workflowStatus);
       if (!isHighScore || !isNotAdvanced) return false;
     }
+    if (filters.queueOnly && !isInContinueQueue(row)) return false;
 
     const score = row.rps.score.finalScore;
     if (filters.minScore != null && score < filters.minScore) return false;

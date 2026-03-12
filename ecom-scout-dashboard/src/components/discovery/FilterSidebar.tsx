@@ -6,14 +6,35 @@ interface Props {
   marketOptions: string[];
   statusOptions: string[];
   riskOptions: string[];
+  queueCount: number;
   setFilters: (patch: Partial<FilterState>) => void;
   resetFilters: () => void;
 }
 
-export function FilterSidebar({ filters, marketOptions, statusOptions, riskOptions, setFilters, resetFilters }: Props) {
+export function FilterSidebar({ filters, marketOptions, statusOptions, riskOptions, queueCount, setFilters, resetFilters }: Props) {
   return (
     <aside style={panelStyle}>
       <h2 style={{ marginTop: 0 }}>筛选器</h2>
+
+      <div style={{ ...fieldBlock, marginBottom: 18 }}>
+        <button
+          onClick={() => setFilters({ queueOnly: !filters.queueOnly })}
+          style={{
+            ...actionButton,
+            width: "100%",
+            background: filters.queueOnly ? "#fff7e6" : "#fff",
+            borderColor: filters.queueOnly ? "#ffd591" : "#ddd",
+            color: filters.queueOnly ? "#ad6800" : "#333",
+            fontWeight: 600,
+          }}
+        >
+          🔥 待处理队列（{queueCount}）
+        </button>
+        <div style={{ fontSize: 12, color: "#888", marginTop: 6 }}>
+          系统高分候选 + 新鲜侦察卡，适合连续判单处理。
+        </div>
+      </div>
+
       <div style={fieldBlock}>
         <label style={labelStyle}>关键词搜索</label>
         <input
@@ -73,6 +94,10 @@ export function FilterSidebar({ filters, marketOptions, statusOptions, riskOptio
           <label style={quickFilterItem}>
             <input type="checkbox" checked={Boolean(filters.reviewPriorityOnly)} onChange={(e) => setFilters({ reviewPriorityOnly: e.target.checked || undefined })} />
             <span>只看高分待处理</span>
+          </label>
+          <label style={quickFilterItem}>
+            <input type="checkbox" checked={Boolean(filters.queueOnly)} onChange={(e) => setFilters({ queueOnly: e.target.checked || undefined })} />
+            <span>只看待处理队列</span>
           </label>
         </div>
       </div>

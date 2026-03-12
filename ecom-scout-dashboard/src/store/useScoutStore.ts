@@ -10,6 +10,7 @@ export interface FilterState {
   manualOnly?: boolean;
   changedOnly?: boolean;
   reviewPriorityOnly?: boolean;
+  queueOnly?: boolean;
 }
 
 export type ImportPhase = "idle" | "parsing" | "validating" | "saving" | "done" | "failed";
