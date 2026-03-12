@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchResearchEvidence, fetchWebEvidence, type FetchDependencies } from "./scoutFetch";
+import { fetchRedditEvidence, fetchResearchEvidence, fetchWebEvidence, type FetchDependencies } from "./scoutFetch";
 import type { ScoutBrief } from "./scoutBrief";
 
 const brief: ScoutBrief = {
@@ -84,5 +84,50 @@ describe("scoutFetch", () => {
     });
 
     expect(docs).toEqual([]);
+  });
+
+  it("maps reddit posts into fetched evidence documents on happy path", async () => {
+    const result = await fetchRedditEvidence(brief, {
+      searchReddit: async () => [
+        {
+          url: "https://www.reddit.com/r/posture/comments/abc123/help_needed",
+          title: "Need help fixing my posture",
+          content: "I sit at my desk all day and my posture keeps getting worse.",
+          subreddit: "posture",
+        },
+      ],
+    });
+
+    expect(result.documents).toHaveLength(1);
+    expect(result.documents[0]?.sourceType).toBe("reddit");
+    expect(result.documents[0]?.sourceUrl).toContain("reddit.com");
+    expect(result.documents[0]?.content).toContain("desk all day");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("returns warnings instead of throwing on reddit timeout or 403", async () => {
+    const result = await fetchRedditEvidence(brief, {
+      searchReddit: async () => {
+        throw new Error("403 Forbidden");
+      },
+    });
+
+    expect(result.documents).toEqual([]);
+    expect(result.warnings).toEqual(["Reddit fetch failed: 403 Forbidden"]);
+  });
+
+  it("treats empty or malformed reddit payload as warning, not crash", async () => {
+    const result = await fetchRedditEvidence(brief, {
+      searchReddit: async () => [
+        {
+          url: "",
+          title: "",
+          content: "",
+        },
+      ],
+    });
+
+    expect(result.documents).toEqual([]);
+    expect(result.warnings).toEqual(["Reddit fetch returned empty or invalid items"]);
   });
 });

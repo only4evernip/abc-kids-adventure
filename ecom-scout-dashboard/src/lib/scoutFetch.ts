@@ -32,6 +32,19 @@ export interface WebFetchDeps {
   fetchDocument: (url: string) => Promise<{ url: string; title?: string; content: string }>;
 }
 
+export interface RedditSearchResult {
+  url: string;
+  title?: string;
+  content?: string;
+  subreddit?: string;
+}
+
+export interface RedditFetchResult extends FetchResult {}
+
+export interface RedditFetchDeps {
+  searchReddit: (brief: ScoutBrief) => Promise<RedditSearchResult[]>;
+}
+
 export async function fetchWebEvidence(brief: ScoutBrief, deps: WebFetchDeps): Promise<FetchedEvidenceDocument[]> {
   const results = await deps.searchWeb(brief);
   if (results.length === 0) return [];
@@ -53,6 +66,37 @@ export async function fetchWebEvidence(brief: ScoutBrief, deps: WebFetchDeps): P
   }
 
   return documents;
+}
+
+export async function fetchRedditEvidence(brief: ScoutBrief, deps: RedditFetchDeps): Promise<RedditFetchResult> {
+  try {
+    const results = await deps.searchReddit(brief);
+    const documents: FetchedEvidenceDocument[] = [];
+
+    for (const item of results) {
+      if (!item.url?.trim() || !item.content?.trim()) {
+        return { documents: [], warnings: ["Reddit fetch returned empty or invalid items"] };
+      }
+
+      documents.push({
+        sourceType: "reddit",
+        sourceName: item.subreddit ? `Reddit/r/${item.subreddit}` : "Reddit",
+        sourceUrl: item.url,
+        title: item.title || item.url,
+        fetchedAt: new Date().toISOString(),
+        keyword: brief.keyword,
+        market: brief.market,
+        content: item.content,
+      });
+    }
+
+    return { documents, warnings: [] };
+  } catch (error) {
+    return {
+      documents: [],
+      warnings: [`Reddit fetch failed: ${error instanceof Error ? error.message : String(error)}`],
+    };
+  }
 }
 
 export async function fetchResearchEvidence(brief: ScoutBrief, deps: FetchDependencies): Promise<FetchResult> {
