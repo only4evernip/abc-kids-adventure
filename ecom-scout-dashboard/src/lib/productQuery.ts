@@ -13,7 +13,8 @@ function buildKeywordHaystack(row: ProductRecord) {
 export async function queryProducts(filters: FilterState): Promise<ProductRecord[]> {
   const normalizedKeyword = normalizeKeyword(filters.keyword);
   const hasScoreFilter = filters.minScore != null || filters.maxScore != null;
-  const hasResidualFilter = Boolean(filters.risk || normalizedKeyword || hasScoreFilter);
+  const hasWorkflowFlags = Boolean(filters.manualOnly || filters.changedOnly || filters.reviewPriorityOnly);
+  const hasResidualFilter = Boolean(filters.risk || normalizedKeyword || hasScoreFilter || hasWorkflowFlags);
 
   let collection:
     | ReturnType<typeof db.products.toCollection>
@@ -35,6 +36,13 @@ export async function queryProducts(filters: FilterState): Promise<ProductRecord
 
   collection = collection.filter((row) => {
     if (filters.risk && row.overallRisk !== filters.risk) return false;
+    if (filters.manualOnly && row.workflowStatusSource !== "manual") return false;
+    if (filters.changedOnly && row.workflowStatus === row.rps.suggestedStatus) return false;
+    if (filters.reviewPriorityOnly) {
+      const isHighScore = row.rps.score.finalScore >= 80;
+      const isNotAdvanced = ["待评估", "观察池", "待补证"].includes(row.workflowStatus);
+      if (!isHighScore || !isNotAdvanced) return false;
+    }
 
     const score = row.rps.score.finalScore;
     if (filters.minScore != null && score < filters.minScore) return false;

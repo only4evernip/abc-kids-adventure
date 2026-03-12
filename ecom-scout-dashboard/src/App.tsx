@@ -45,7 +45,17 @@ export default function App() {
 
   const filteredRows = useLiveQuery(
     () => queryProducts(queryFilters),
-    [queryFilters.market, queryFilters.risk, queryFilters.minScore, queryFilters.maxScore, queryFilters.keyword, queryFilters.workflowStatus],
+    [
+      queryFilters.market,
+      queryFilters.risk,
+      queryFilters.minScore,
+      queryFilters.maxScore,
+      queryFilters.keyword,
+      queryFilters.workflowStatus,
+      queryFilters.manualOnly,
+      queryFilters.changedOnly,
+      queryFilters.reviewPriorityOnly,
+    ],
     [] as ProductRecord[]
   );
 

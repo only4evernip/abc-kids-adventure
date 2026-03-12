@@ -7,6 +7,9 @@ export interface FilterState {
   maxScore?: number;
   keyword?: string;
   workflowStatus?: string;
+  manualOnly?: boolean;
+  changedOnly?: boolean;
+  reviewPriorityOnly?: boolean;
 }
 
 export type ImportPhase = "idle" | "parsing" | "validating" | "saving" | "done" | "failed";

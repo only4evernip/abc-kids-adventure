@@ -110,10 +110,15 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
 
   return (
     <section style={panelStyle}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 12, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: 0 }}>发现矩阵</h2>
           <div style={{ color: "#666", fontSize: 13 }}>当前结果 {rows.length} 条，支持排序、虚拟滚动与点击查看详情。</div>
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", fontSize: 12, color: "#555" }}>
+          <span style={legendBadge("#f0f5ff", "#2f54eb")}>人工接管</span>
+          <span style={legendBadge("#fffbe6", "#faad14")}>状态分叉</span>
+          <span style={legendBadge("#f6ffed", "#52c41a")}>高分待处理</span>
         </div>
       </div>
 
@@ -138,6 +143,31 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
             <div style={{ height: rowVirtualizer.getTotalSize(), position: "relative" }}>
               {virtualRows.map((virtualRow) => {
                 const row = tableRows[virtualRow.index];
+                const isManual = row.original.workflowStatusSource === "manual";
+                const isChanged = row.original.workflowStatus !== row.original.rps.suggestedStatus;
+                const isReviewPriority = row.original.rps.score.finalScore >= 80 && ["待评估", "观察池", "待补证"].includes(row.original.workflowStatus);
+                const isSelected = selectedProductId === row.original.id;
+
+                let background = "#fff";
+                let boxShadow = "inset 0 0 0 0 transparent";
+
+                if (isReviewPriority) {
+                  background = "#f6ffed";
+                  boxShadow = "inset 4px 0 0 #52c41a";
+                }
+                if (isChanged) {
+                  background = "#fffbe6";
+                  boxShadow = "inset 4px 0 0 #faad14";
+                }
+                if (isManual) {
+                  background = "#f0f5ff";
+                  boxShadow = "inset 4px 0 0 #2f54eb";
+                }
+                if (isSelected) {
+                  background = "#e6f4ff";
+                  boxShadow = "inset 4px 0 0 #1677ff";
+                }
+
                 return (
                   <div
                     key={row.id}
@@ -151,7 +181,8 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
                       display: "grid",
                       gridTemplateColumns: GRID_TEMPLATE,
                       cursor: "pointer",
-                      background: selectedProductId === row.original.id ? "#f5f9ff" : "#fff",
+                      background,
+                      boxShadow,
                       borderBottom: "1px solid #f0f0f0",
                       minHeight: ROW_HEIGHT,
                     }}
@@ -168,6 +199,19 @@ export function ProductTable({ rows, selectedProductId, sorting, setSorting, onS
       </div>
     </section>
   );
+}
+
+function legendBadge(background: string, color: string): CSSProperties {
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "4px 8px",
+    borderRadius: 999,
+    background,
+    color: "#333",
+    boxShadow: `inset 3px 0 0 ${color}`,
+  };
 }
 
 const panelStyle: CSSProperties = {

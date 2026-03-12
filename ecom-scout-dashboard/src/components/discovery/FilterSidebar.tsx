@@ -59,6 +59,24 @@ export function FilterSidebar({ filters, marketOptions, statusOptions, riskOptio
         <input type="number" value={filters.maxScore ?? ""} onChange={(e) => setFilters({ maxScore: e.target.value ? Number(e.target.value) : undefined })} style={inputStyle} />
       </div>
 
+      <div style={fieldBlock}>
+        <label style={labelStyle}>专用工作流捷径</label>
+        <div style={quickFilterList}>
+          <label style={quickFilterItem}>
+            <input type="checkbox" checked={Boolean(filters.manualOnly)} onChange={(e) => setFilters({ manualOnly: e.target.checked || undefined })} />
+            <span>只看人工接管</span>
+          </label>
+          <label style={quickFilterItem}>
+            <input type="checkbox" checked={Boolean(filters.changedOnly)} onChange={(e) => setFilters({ changedOnly: e.target.checked || undefined })} />
+            <span>只看状态分叉</span>
+          </label>
+          <label style={quickFilterItem}>
+            <input type="checkbox" checked={Boolean(filters.reviewPriorityOnly)} onChange={(e) => setFilters({ reviewPriorityOnly: e.target.checked || undefined })} />
+            <span>只看高分待处理</span>
+          </label>
+        </div>
+      </div>
+
       <button onClick={resetFilters} style={{ ...actionButton, width: "100%" }}>重置筛选</button>
     </aside>
   );
@@ -101,4 +119,17 @@ const actionButton: CSSProperties = {
   padding: "10px 14px",
   borderRadius: 10,
   cursor: "pointer",
+};
+
+const quickFilterList: CSSProperties = {
+  display: "grid",
+  gap: 8,
+};
+
+const quickFilterItem: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
+  fontSize: 13,
+  color: "#333",
 };
