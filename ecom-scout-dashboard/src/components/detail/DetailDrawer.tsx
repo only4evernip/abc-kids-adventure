@@ -7,6 +7,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (id: string, patch: { workflowStatus: WorkflowStatus; notes: string }) => void;
+  onExportScoutSync?: (row: ProductRecord) => void;
 }
 
 function badgeStyle(bg: string, color = "#111"): CSSProperties {
@@ -53,7 +54,7 @@ function signalBadge(value: "high" | "medium-high" | "medium" | "low", kind: "de
   };
 }
 
-export function DetailDrawer({ row, open, onClose, onSave }: Props) {
+export function DetailDrawer({ row, open, onClose, onSave, onExportScoutSync }: Props) {
   const [status, setStatus] = useState<WorkflowStatus>("待评估");
   const [notes, setNotes] = useState("");
 
@@ -181,7 +182,12 @@ export function DetailDrawer({ row, open, onClose, onSave }: Props) {
           <div style={detailBlock}>
             <strong>本地备注</strong>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={5} style={{ ...inputStyle, resize: "vertical" }} placeholder="这里写本地判断、供应链线索、人工备注..." />
-            <button onClick={() => onSave(row.id, { workflowStatus: status, notes })} style={{ ...smallButton, marginTop: 10 }}>保存状态与备注</button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+              <button onClick={() => onSave(row.id, { workflowStatus: status, notes })} style={smallButton}>保存状态与备注</button>
+              {isScoutCard && onExportScoutSync ? (
+                <button onClick={() => onExportScoutSync({ ...row, notes, workflowStatus: status })} style={smallButton}>导出飞书同步 JSON</button>
+              ) : null}
+            </div>
           </div>
 
           <div style={detailBlock}>

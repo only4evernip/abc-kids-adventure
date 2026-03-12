@@ -4,6 +4,7 @@ import type { SortingState } from "@tanstack/react-table";
 import { db, exportSessionPayload, importSessionPayload, updateProductRecord } from "./lib/db";
 import { queryProducts } from "./lib/productQuery";
 import { parseScoutCard, scoutCardToProductRecord } from "./lib/scoutCard";
+import { scoutCardToFeishuRecord } from "./lib/scoutCardFeishu";
 import { useScoutStore } from "./store/useScoutStore";
 import type { ProductRecord, WorkflowStatus } from "./types/product";
 import { useScoreWorker } from "./hooks/useScoreWorker";
@@ -21,6 +22,45 @@ function downloadJson(filename: string, content: unknown) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function productRecordToScoutCard(row: ProductRecord) {
+  if (!row.scoutMeta) return null;
+
+  return {
+    schemaVersion: "scout-card.v1" as const,
+    cardId: row.scoutMeta.cardId,
+    createdAt: row.researchDate ? `${row.researchDate}T00:00:00+08:00` : row.importedAt,
+    updatedAt: row.workflowStatusUpdatedAt || row.importedAt,
+    topic: {
+      keyword: row.keyword,
+      productDirection: row.productDirection,
+      market: row.market,
+      platformFocus: row.platformSite ? [row.platformSite] : [],
+      language: "en",
+    },
+    signals: {
+      demandSignal: row.scoutMeta.demandSignal,
+      competitionSignal: row.scoutMeta.competitionSignal,
+      confidence: row.scoutMeta.confidence,
+    },
+    insights: {
+      painPoints: row.scoutMeta.painPoints,
+      risks: row.scoutMeta.risks,
+      opportunities: row.scoutMeta.opportunities,
+    },
+    decision: {
+      preliminaryDecision: row.scoutMeta.preliminaryDecision,
+      nextStep: row.nextAction,
+      reasonSummary: row.scoutMeta.reasonSummary,
+    },
+    evidence: row.scoutMeta.evidence,
+    workbench: {
+      workflowStatus: row.workflowStatus,
+      notes: row.notes || "",
+      tags: row.scoutMeta.tags,
+    },
+  };
 }
 
 export default function App() {
@@ -154,6 +194,18 @@ export default function App() {
     setLastMessage(`已保存：${patch.workflowStatus}${patch.notes ? " + 备注" : ""}`);
   };
 
+  const handleExportScoutSync = (row: ProductRecord) => {
+    const card = productRecordToScoutCard(row);
+    if (!card) {
+      setLastMessage("当前记录不是侦察卡，无法导出飞书同步 JSON");
+      return;
+    }
+    const payload = scoutCardToFeishuRecord(card);
+    const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    downloadJson(`sync_${row.scoutMeta?.cardId || row.id}_${stamp}.json`, payload);
+    setLastMessage(`已导出飞书同步 JSON：${row.productDirection}`);
+  };
+
   return (
     <main
       style={{
@@ -235,7 +287,13 @@ export default function App() {
           }}
         />
 
-        <DetailDrawer row={selectedRow} open={detailDrawerOpen} onClose={() => setDetailDrawerOpen(false)} onSave={handleSaveDetail} />
+        <DetailDrawer
+          row={selectedRow}
+          open={detailDrawerOpen}
+          onClose={() => setDetailDrawerOpen(false)}
+          onSave={handleSaveDetail}
+          onExportScoutSync={handleExportScoutSync}
+        />
       </section>
     </main>
   );
