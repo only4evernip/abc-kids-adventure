@@ -12,6 +12,7 @@
 
 它擅长：
 - 导入真实 CSV 数据
+- 导入侦察虾产出的 Scout Card JSON
 - 本地打分与入库
 - 快速筛选候选品
 - 记录人工判断与备注
@@ -137,6 +138,8 @@
 ## 导入链路
 - `src/workers/score.worker.ts`
 - `src/hooks/useScoreWorker.ts`
+- `src/lib/scoutCard.ts`
+- `src/lib/scoutCardFeishu.ts`
 
 ## 主要 UI
 - `src/App.tsx`
