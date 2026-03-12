@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import example from "../../scout-card.example.json";
-import { parseScoutCard, scoutCardToProductRecord } from "./scoutCard";
+import { parseScoutCard, scoutCardToProductRecord, type ScoutCard } from "./scoutCard";
 import { scoutCardToFeishuRecord } from "./scoutCardFeishu";
 
 describe("scout card workbench export path", () => {
@@ -8,8 +8,8 @@ describe("scout card workbench export path", () => {
     const card = parseScoutCard(example);
     const record = scoutCardToProductRecord(card, "roundtrip-test");
 
-    const reconstructed = {
-      schemaVersion: "scout-card.v1" as const,
+    const reconstructed: ScoutCard = {
+      schemaVersion: "scout-card.v1",
       cardId: record.scoutMeta!.cardId,
       createdAt: `${record.researchDate}T00:00:00+08:00`,
       updatedAt: record.workflowStatusUpdatedAt || record.importedAt,

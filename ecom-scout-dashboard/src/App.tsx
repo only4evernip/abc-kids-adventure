@@ -3,7 +3,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import type { SortingState } from "@tanstack/react-table";
 import { db, exportSessionPayload, importSessionPayload, updateProductRecord } from "./lib/db";
 import { queryProducts } from "./lib/productQuery";
-import { parseScoutCard, scoutCardToProductRecord } from "./lib/scoutCard";
+import { parseScoutCard, scoutCardToProductRecord, type ScoutCard } from "./lib/scoutCard";
 import { scoutCardToFeishuRecord } from "./lib/scoutCardFeishu";
 import { useScoutStore } from "./store/useScoutStore";
 import type { ProductRecord, WorkflowStatus } from "./types/product";
@@ -24,7 +24,7 @@ function downloadJson(filename: string, content: unknown) {
   URL.revokeObjectURL(url);
 }
 
-function productRecordToScoutCard(row: ProductRecord) {
+function productRecordToScoutCard(row: ProductRecord): ScoutCard | null {
   if (!row.scoutMeta) return null;
 
   return {
