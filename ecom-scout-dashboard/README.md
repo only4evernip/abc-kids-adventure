@@ -191,7 +191,11 @@ npm install
 npm test
 npm run build
 npm run dev
+npm run build:sync
+npm run sync:feishu -- --file ./scout-card.example.json --mode mock
 ```
+
+> 当前 `sync:feishu` 是本地脚本 MVP，默认按 `.env.local` / `.env.local.example` 配置走 mock 模式，不会发真实网络请求。
 
 ---
 

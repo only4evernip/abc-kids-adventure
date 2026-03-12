@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "./dist-sync",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "declaration": false,
+    "sourceMap": false
+  },
+  "include": [
+    "src/lib/scoutCard.ts",
+    "src/lib/scoutCardFeishu.ts",
+    "src/domain/rps.ts",
+    "src/types/product.ts"
+  ]
+}
