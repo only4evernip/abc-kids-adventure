@@ -1,5 +1,5 @@
-import { calculateRps } from "../domain/rps";
-import type { Level4, ProductRecord, ProductRow, WorkflowStatus } from "../types/product";
+import { calculateRps } from "../domain/rps.ts";
+import type { Level4, ProductRecord, ProductRow, WorkflowStatus } from "../types/product.ts";
 
 export type ScoutSignalLevel = "high" | "medium-high" | "medium" | "low";
 export type ScoutConfidenceLevel = "high" | "medium" | "low";

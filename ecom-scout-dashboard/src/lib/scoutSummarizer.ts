@@ -121,6 +121,10 @@ export function parseScoutResearchDraft(
       keyword: ensureNonEmptyString(record.keyword, "keyword"),
       market,
       productDirection: ensureNonEmptyString(record.productDirection, "productDirection"),
+      platformFocus: Array.isArray(record.platformFocus)
+        ? record.platformFocus.filter((item): item is string => typeof item === "string" && !!item.trim()).map((item) => item.trim())
+        : undefined,
+      language: typeof record.language === "string" && record.language.trim() ? record.language.trim() : undefined,
       demandSignal,
       competitionSignal,
       demandEvidence: ensureEvidenceArray(record.demandEvidence, "demandEvidence"),

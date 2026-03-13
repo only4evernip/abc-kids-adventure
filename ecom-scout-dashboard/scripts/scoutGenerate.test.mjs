@@ -1,23 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { buildMockResearchDraft } from "./scoutGenerate.mjs";
+import { generateScoutCard } from "./scoutGenerate.mjs";
 
 describe("scoutGenerate script helpers", () => {
-  it("builds a mock research draft from scout brief", () => {
-    const draft = buildMockResearchDraft({
-      version: 1,
-      keyword: "posture corrector",
-      market: "US",
-      language: "en",
-      platformFocus: ["Amazon US", "Reddit"],
-      researchGoal: "需求验证 + 风险排查",
-      notes: "优先看办公场景",
+  it("runs the V1.1 fetch -> summarize -> card pipeline with mock deps", async () => {
+    const result = await generateScoutCard({
+      brief: {
+        version: 1,
+        keyword: "posture corrector",
+        market: "US",
+        language: "en",
+        platformFocus: ["Amazon US", "Reddit"],
+        researchGoal: "需求验证 + 风险排查",
+        notes: "优先看办公场景",
+      },
+      cacheRoot: "/tmp/ecom-scout-cli-pipeline-test",
     });
 
-    expect(draft.keyword).toBe("posture corrector");
-    expect(draft.market).toBe("US");
-    expect(draft.productDirection).toBe("posture corrector");
-    expect(draft.demandEvidence.length).toBeGreaterThan(0);
-    expect(draft.painPointEvidence.length).toBeGreaterThan(0);
-    expect(draft.riskEvidence.length).toBeGreaterThan(0);
+    expect(result.documents.length).toBeGreaterThan(0);
+    expect(result.draft.keyword).toBe("posture corrector");
+    expect(result.summary.preliminaryDecision).toBe("watch");
+    expect(result.summary.demandEvidence.length).toBeGreaterThan(0);
+    expect(result.summary.painPointEvidence.length).toBeGreaterThan(0);
+    expect(result.summary.riskEvidence.length).toBeGreaterThan(0);
+    expect(result.card.schemaVersion).toBe("scout-card.v1");
+    expect(result.card.topic.keyword).toBe("posture corrector");
+    expect(result.card.evidence.length).toBeGreaterThan(0);
   });
 });

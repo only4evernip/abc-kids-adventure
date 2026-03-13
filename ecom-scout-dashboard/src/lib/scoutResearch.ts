@@ -11,6 +11,8 @@ export interface ScoutResearchDraft {
   keyword: string;
   market: "US" | "CA";
   productDirection: string;
+  platformFocus?: string[];
+  language?: string;
   demandSignal: ScoutSignalLevel;
   competitionSignal: ScoutSignalLevel;
   demandEvidence: ScoutResearchDraftEvidence[];
@@ -30,6 +32,8 @@ export interface NormalizedResearchSummary {
   keyword: string;
   market: "US" | "CA";
   productDirection: string;
+  platformFocus?: string[];
+  language?: string;
   demandSignal: ScoutSignalLevel;
   competitionSignal: ScoutSignalLevel;
   demandEvidence: ScoutEvidenceItem[];
@@ -37,6 +41,12 @@ export interface NormalizedResearchSummary {
   painPointEvidence: ScoutEvidenceItem[];
   risks: string[];
   riskEvidence: ScoutEvidenceItem[];
+  opportunities?: string[];
+  preliminaryDecision: "go-deeper" | "watch" | "drop";
+  reasonSummary: string;
+  nextStep: string;
+  notes?: string;
+  tags?: string[];
   warnings: string[];
 }
 
@@ -97,6 +107,8 @@ export function normalizeResearchSummary(draft: ScoutResearchDraft): NormalizedR
     keyword: draft.keyword,
     market: draft.market,
     productDirection: draft.productDirection,
+    platformFocus: draft.platformFocus,
+    language: draft.language,
     demandSignal: draft.demandSignal,
     competitionSignal: draft.competitionSignal,
     demandEvidence: demand.kept,
@@ -104,6 +116,12 @@ export function normalizeResearchSummary(draft: ScoutResearchDraft): NormalizedR
     painPointEvidence: pain.kept,
     risks: draft.risks,
     riskEvidence: risk.kept,
+    opportunities: draft.opportunities,
+    preliminaryDecision: draft.preliminaryDecision,
+    reasonSummary: draft.reasonSummary,
+    nextStep: draft.nextStep,
+    notes: draft.notes,
+    tags: draft.tags,
     warnings: [...demand.warnings, ...pain.warnings, ...risk.warnings],
   };
 }

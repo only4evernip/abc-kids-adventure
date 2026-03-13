@@ -1,4 +1,4 @@
-import type { EligibilityResult, Level4, ProductRow, RpsResult, RpsLevel, ScoreBreakdown, WorkflowStatus } from "../types/product";
+import type { EligibilityResult, Level4, ProductRow, RpsResult, RpsLevel, ScoreBreakdown, WorkflowStatus } from "../types/product.ts";
 
 function clamp(value: number, min = 0, max = 100) {
   return Math.min(max, Math.max(min, value));
