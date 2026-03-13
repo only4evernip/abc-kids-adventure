@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRedditComplaintQueries, cleanRedditThread, discoverRedditThreads, extractRedditUrlsFromSearchMarkdown } from "./redditAdapter";
+import { buildRedditComplaintQueries, cleanRedditThread, discoverRedditThreads, extractRedditUrlsFromSearchMarkdown, normalizeToOldReddit } from "./redditAdapter";
 
 describe("redditAdapter", () => {
   it("builds poisoned reddit complaint queries from keyword", () => {
@@ -12,6 +12,12 @@ describe("redditAdapter", () => {
         'site:reddit.com "posture corrector" reddit "stopped using"',
         'site:reddit.com "posture corrector" reddit pain',
       ])
+    );
+  });
+
+  it("normalizes reddit links to old.reddit", () => {
+    expect(normalizeToOldReddit("https://www.reddit.com/r/Posture/comments/abc123/test/")).toBe(
+      "https://old.reddit.com/r/Posture/comments/abc123/test/"
     );
   });
 
@@ -31,8 +37,8 @@ Some snippet here.
     const urls = extractRedditUrlsFromSearchMarkdown(markdown);
 
     expect(urls).toEqual([
-      "https://www.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/",
-      "https://www.reddit.com/r/BackPain/comments/def456/waste_of_money/",
+      "https://old.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/",
+      "https://old.reddit.com/r/BackPain/comments/def456/waste_of_money/",
     ]);
   });
 
@@ -60,8 +66,8 @@ Some snippet here.
     });
 
     expect(urls).toEqual([
-      "https://www.reddit.com/r/BackPain/comments/def456/waste_of_money/",
-      "https://www.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/",
+      "https://old.reddit.com/r/BackPain/comments/def456/waste_of_money/",
+      "https://old.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/",
     ]);
   });
 
@@ -76,6 +82,6 @@ Some snippet here.
       limit: 5,
     });
 
-    expect(urls).toEqual(["https://www.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/"]);
+    expect(urls).toEqual(["https://old.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/"]);
   });
 });

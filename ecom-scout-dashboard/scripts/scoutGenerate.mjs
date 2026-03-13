@@ -80,9 +80,9 @@ export function createLiveWebFetcher() {
 }
 
 const HARDCODED_REDDIT_SEEDS = [
-  "https://www.reddit.com/r/backpain/comments/fshq8y/posture_correctors_do_they_actually_work/",
-  "https://www.reddit.com/r/stretching/comments/16v2g9c/posture_correctors_the_good_the_bad_the_ugly/",
-  "https://www.reddit.com/r/Posture/comments/8o6xly/do_posture_correctors_work/",
+  "https://old.reddit.com/r/backpain/comments/fshq8y/posture_correctors_do_they_actually_work/",
+  "https://old.reddit.com/r/stretching/comments/16v2g9c/posture_correctors_the_good_the_bad_the_ugly/",
+  "https://old.reddit.com/r/Posture/comments/8o6xly/do_posture_correctors_work/",
 ];
 
 export function createLiveRedditFetcher(options = { debug: false, seedMode: true }) {
