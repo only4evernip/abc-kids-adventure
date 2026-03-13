@@ -79,46 +79,77 @@ export function createLiveWebFetcher() {
     });
 }
 
-export function createLiveRedditFetcher() {
+const HARDCODED_REDDIT_SEEDS = [
+  "https://www.reddit.com/r/backpain/comments/fshq8y/posture_correctors_do_they_actually_work/",
+  "https://www.reddit.com/r/stretching/comments/16v2g9c/posture_correctors_the_good_the_bad_the_ugly/",
+  "https://www.reddit.com/r/Posture/comments/8o6xly/do_posture_correctors_work/",
+];
+
+export function createLiveRedditFetcher(options = { debug: false, seedMode: true }) {
   return async (brief) => {
-    const urls = await discoverRedditThreads(brief.keyword, {
-      fetchSearchMarkdown: async (query) => {
-        const searchUrl = `https://s.jina.ai/${encodeURIComponent(query)}`;
-        const response = await fetch(searchUrl, {
-          headers: { "X-Respond-With": "no-content" },
+    const urls = options.seedMode
+      ? HARDCODED_REDDIT_SEEDS
+      : await discoverRedditThreads(brief.keyword, {
+          fetchSearchMarkdown: async (query) => {
+            const searchUrl = `https://s.jina.ai/${encodeURIComponent(query)}`;
+            const response = await fetch(searchUrl, {
+              headers: { "X-Respond-With": "no-content" },
+            });
+            if (!response.ok) {
+              throw new Error(`Jina reddit discovery failed with status: ${response.status}`);
+            }
+            return response.text();
+          },
+          fetchSearchMarkdownFallback: async (query) => {
+            const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10&hl=en`;
+            const doc = await fetchDocumentWithJina(googleUrl);
+            return doc.content;
+          },
+          pickQueries: (queries) => queries.slice(0, 2),
+          limit: 3,
+          debug: options.debug,
         });
-        if (!response.ok) {
-          throw new Error(`Jina reddit discovery failed with status: ${response.status}`);
-        }
-        return response.text();
-      },
-      fetchSearchMarkdownFallback: async (query) => {
-        const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10&hl=en`;
-        const doc = await fetchDocumentWithJina(googleUrl);
-        return doc.content;
-      },
-      pickQueries: (queries) => queries.slice(0, 2),
-      limit: 3,
-    });
 
     const documents = [];
     for (const url of urls) {
-      const doc = await fetchDocumentWithJina(url);
-      const content = cleanRedditThread(doc.content);
-      if (!content.trim()) continue;
-      const subredditMatch = url.match(/reddit\.com\/r\/([^/]+)/i);
-      documents.push({
-        sourceType: "reddit",
-        sourceName: subredditMatch ? `Reddit/r/${subredditMatch[1]}` : "Reddit",
-        sourceUrl: url,
-        title: doc.title || url,
-        fetchedAt: new Date().toISOString(),
-        keyword: brief.keyword,
-        market: brief.market,
-        content,
-      });
+      try {
+        if (options.debug) {
+          console.log("[reddit-fetch] Starting fetch for:", url);
+        }
+        const doc = await fetchDocumentWithJina(url);
+        const content = cleanRedditThread(doc.content);
+        if (options.debug) {
+          console.log("[reddit-fetch] Status: 200");
+          console.log("[reddit-fetch] Cleaned Content Length:", content.length);
+        }
+        if (!content.trim()) {
+          if (options.debug) {
+            console.log("[reddit-fetch] dropped empty cleaned content:", url);
+          }
+          continue;
+        }
+        const subredditMatch = url.match(/reddit\.com\/r\/([^/]+)/i);
+        documents.push({
+          sourceType: "reddit",
+          sourceName: subredditMatch ? `Reddit/r/${subredditMatch[1]}` : "Reddit",
+          sourceUrl: url,
+          title: doc.title || url,
+          fetchedAt: new Date().toISOString(),
+          keyword: brief.keyword,
+          market: brief.market,
+          content,
+        });
+      } catch (error) {
+        if (options.debug) {
+          console.log("[reddit-fetch] Status:", error instanceof Error ? error.message : String(error));
+          console.log("[reddit-fetch] failed url:", url, error instanceof Error ? error.message : String(error));
+        }
+      }
     }
 
+    if (options.debug) {
+      console.log("[reddit-fetch] retained documents:", documents.map((doc) => doc.sourceUrl));
+    }
     return documents;
   };
 }
@@ -219,7 +250,7 @@ export async function main(argv = process.argv.slice(2)) {
   const raw = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   const brief = parseScoutBrief(raw);
   const fetchers = args.liveWeb
-    ? { ...createMockFetchers(), web: createLiveWebFetcher(), reddit: createLiveRedditFetcher() }
+    ? { ...createMockFetchers(), web: createLiveWebFetcher(), reddit: createLiveRedditFetcher({ debug: args.debugContent, seedMode: true }) }
     : createMockFetchers();
 
   if (args.liveLlm && args.liveGemini) {
