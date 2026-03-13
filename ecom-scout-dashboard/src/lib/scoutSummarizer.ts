@@ -33,6 +33,10 @@ function ensureNonEmptyString(value: unknown, field: string) {
   return value.trim();
 }
 
+function normalizeEnumString(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : value;
+}
+
 function ensureStringArray(value: unknown, field: string) {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
     throw new Error(`invalid ${field}`);
@@ -97,12 +101,12 @@ export function parseScoutResearchDraft(
       throw new Error("invalid market");
     }
 
-    const demandSignal = record.demandSignal;
+    const demandSignal = normalizeEnumString(record.demandSignal);
     if (demandSignal !== "high" && demandSignal !== "medium-high" && demandSignal !== "medium" && demandSignal !== "low") {
       throw new Error("invalid demandSignal");
     }
 
-    const competitionSignal = record.competitionSignal;
+    const competitionSignal = normalizeEnumString(record.competitionSignal);
     if (
       competitionSignal !== "high" &&
       competitionSignal !== "medium-high" &&
@@ -112,7 +116,7 @@ export function parseScoutResearchDraft(
       throw new Error("invalid competitionSignal");
     }
 
-    const preliminaryDecision = record.preliminaryDecision;
+    const preliminaryDecision = normalizeEnumString(record.preliminaryDecision);
     if (preliminaryDecision !== "go-deeper" && preliminaryDecision !== "watch" && preliminaryDecision !== "drop") {
       throw new Error("missing preliminaryDecision");
     }
@@ -183,7 +187,15 @@ export async function summarizeResearchDraft({
   if (cached) return cached;
 
   const raw = await llmClient(buildSummarizerPrompt(brief, documents));
-  const draft = parseScoutResearchDraft(raw, { documents });
+
+  let draft: ScoutResearchDraft;
+  try {
+    draft = parseScoutResearchDraft(raw, { documents });
+  } catch (error) {
+    console.error("Raw LLM Output:", raw);
+    throw error;
+  }
+
   writeDraftCache(brief, draft, cacheRoot);
   return draft;
 }

@@ -165,6 +165,57 @@ describe("scoutSummarizer", () => {
     ).rejects.toThrow("LLM draft validation failed: missing preliminaryDecision");
   });
 
+  it("normalizes enum casing before strict validation", async () => {
+    const mockLlmClient: ScoutLlmClient = async () =>
+      JSON.stringify({
+        keyword: "anti snoring device",
+        market: "US",
+        productDirection: "comfortable anti-snoring mouthpiece",
+        demandSignal: "High",
+        competitionSignal: "Medium-High",
+        demandEvidence: [
+          {
+            sourceName: "Sleep Foundation",
+            sourceUrl: "https://example.com/snoring-guide",
+            title: "How people deal with snoring",
+            summary: "Users actively look for anti-snoring solutions.",
+          },
+        ],
+        painPoints: ["佩戴不舒服"],
+        painPointEvidence: [
+          {
+            sourceName: "Reddit/r/snoring",
+            sourceUrl: "https://www.reddit.com/r/snoring/comments/abc123/help",
+            title: "Need an anti snoring device that I can tolerate",
+            summary: "Comfort and adherence are repeated complaints.",
+          },
+        ],
+        risks: ["赛道成熟"],
+        riskEvidence: [
+          {
+            sourceName: "Sleep Foundation",
+            sourceUrl: "https://example.com/snoring-guide",
+            title: "How people deal with snoring",
+            summary: "The category is established and users are demanding.",
+          },
+        ],
+        preliminaryDecision: "Watch",
+        reasonSummary: "需求真实，但要保守观察。",
+        nextStep: "继续补抓评论数据",
+      });
+
+    const result = await summarizeResearchDraft({
+      brief,
+      documents,
+      cacheRoot: `${cacheRoot}-enum-normalize`,
+      llmClient: mockLlmClient,
+    });
+
+    expect(result.demandSignal).toBe("high");
+    expect(result.competitionSignal).toBe("medium-high");
+    expect(result.preliminaryDecision).toBe("watch");
+  });
+
   it("never fabricates evidence when documents are empty", async () => {
     const mockLlmClient: ScoutLlmClient = async () =>
       JSON.stringify({

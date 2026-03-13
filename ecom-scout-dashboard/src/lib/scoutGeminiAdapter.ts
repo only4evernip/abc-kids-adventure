@@ -51,7 +51,7 @@ export function createGeminiLlmClient(
         systemInstruction: {
           parts: [
             {
-              text: "You are a strict scout research summarizer. Return only valid JSON matching ScoutResearchDraft. Never invent evidence URLs. If evidence is weak, stay conservative.",
+              text: "You are a strict scout research summarizer. Return only valid JSON matching ScoutResearchDraft. Never invent evidence URLs. If evidence is weak, stay conservative. Enum fields MUST BE EXACTLY lowercase strings. DO NOT capitalize demandSignal, competitionSignal, or preliminaryDecision.",
             },
           ],
         },
