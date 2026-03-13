@@ -1,14 +1,66 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchDocumentWithJina } from "./scoutWebAdapter";
+import { cleanJinaMarkdown, fetchDocumentWithJina } from "./scoutWebAdapter";
 
 describe("scoutWebAdapter", () => {
+  it("cuts away Jina header metadata and starts from the real article body", () => {
+    const raw = `Title: The 4 Best Posture Correctors and How to Choose
+
+URL Source: https://www.healthline.com/health/best-posture-corrector
+
+Published Time: 2020-04-08T11:45:00Z
+
+Markdown Content:
+# 4 Best Posture Correctors
+
+This is the real article body.`;
+
+    const cleaned = cleanJinaMarkdown(raw);
+
+    expect(cleaned).not.toContain("Title:");
+    expect(cleaned).not.toContain("URL Source:");
+    expect(cleaned).not.toContain("Markdown Content:");
+    expect(cleaned.startsWith("# 4 Best Posture Correctors")).toBe(true);
+  });
+
+  it("strips image markdown, compresses excessive blank lines, and removes link-only clutter lines", () => {
+    const raw = `# Article Title
+
+![Hero](https://example.com/image.png)
+
+
+
+[](https://example.com)
+
+Some useful paragraph.
+
+
+
+Another useful paragraph.`;
+
+    const cleaned = cleanJinaMarkdown(raw);
+
+    expect(cleaned).not.toContain("![Hero]");
+    expect(cleaned).not.toContain("[](https://example.com)");
+    expect(cleaned).toContain("Some useful paragraph.");
+    expect(cleaned).toContain("Another useful paragraph.");
+    expect(cleaned).not.toContain("\n\n\n");
+  });
+
+  it("hard truncates extremely long content to the failsafe limit", () => {
+    const longBody = `# Article Title\n\n${"A".repeat(25000)}`;
+    const cleaned = cleanJinaMarkdown(longBody, { maxChars: 15000 });
+
+    expect(cleaned.length).toBeLessThanOrEqual(15000);
+    expect(cleaned.startsWith("# Article Title")).toBe(true);
+  });
+
   it("builds the Jina Reader URL and parses markdown into title/content", async () => {
     const fetcher = vi.fn(async (url: string) => {
       expect(url).toBe("https://r.jina.ai/http://example.com/review");
       return {
         ok: true,
         status: 200,
-        text: async () => "# Best Posture Corrector\n\nThis is the real article body.",
+        text: async () => "Title: Best Posture Corrector\n\nURL Source: http://example.com/review\n\nMarkdown Content:\n# Best Posture Corrector\n\nThis is the real article body.",
       };
     });
 
@@ -17,6 +69,7 @@ describe("scoutWebAdapter", () => {
     expect(result.url).toBe("http://example.com/review");
     expect(result.title).toBe("Best Posture Corrector");
     expect(result.content).toContain("This is the real article body.");
+    expect(result.content).not.toContain("URL Source:");
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
