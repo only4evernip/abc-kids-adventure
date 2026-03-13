@@ -2,15 +2,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseScoutBrief } from "../src/lib/scoutBrief.ts";
 import { runFetchWithCache } from "../src/lib/scoutCache.ts";
+import { fetchWebEvidence } from "../src/lib/scoutFetch.ts";
 import { normalizeResearchSummary } from "../src/lib/scoutResearch.ts";
 import { buildScoutCardFromResearch } from "../src/lib/scoutCard.ts";
 import { summarizeResearchDraft } from "../src/lib/scoutSummarizer.ts";
+import { fetchDocumentWithJina } from "../src/lib/scoutWebAdapter.ts";
 
 export function parseArgs(argv) {
   const args = {
     file: "./scout-brief.example.json",
     out: "/tmp/scout-card.json",
     cacheRoot: "scout-cache",
+    liveWeb: false,
+    debugContent: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -18,6 +22,8 @@ export function parseArgs(argv) {
     if (arg === "--file") args.file = argv[i + 1];
     if (arg === "--out") args.out = argv[i + 1];
     if (arg === "--cache-root") args.cacheRoot = argv[i + 1];
+    if (arg === "--live-web") args.liveWeb = true;
+    if (arg === "--debug-content") args.debugContent = true;
   }
 
   return args;
@@ -50,6 +56,19 @@ export function createMockFetchers() {
       },
     ],
   };
+}
+
+export function createLiveWebFetcher() {
+  return async (brief) =>
+    fetchWebEvidence(brief, {
+      searchWeb: async () => [
+        {
+          url: "https://www.healthline.com/health/best-posture-corrector",
+          title: "The 4 Best Posture Correctors and How to Choose",
+        },
+      ],
+      fetchDocument: (url) => fetchDocumentWithJina(url),
+    });
 }
 
 export function createMockLlmClient() {
@@ -106,6 +125,7 @@ export async function generateScoutCard({
   cacheRoot = "scout-cache",
   fetchers = createMockFetchers(),
   llmClient = createMockLlmClient(),
+  debugContent = false,
 }) {
   const webDocuments = await runFetchWithCache({
     brief,
@@ -122,6 +142,7 @@ export async function generateScoutCard({
   });
 
   const documents = [...webDocuments, ...redditDocuments];
+  const contentPreview = debugContent && documents[0]?.content ? documents[0].content.slice(0, 500) : undefined;
   const draft = await summarizeResearchDraft({
     brief,
     documents,
@@ -131,7 +152,7 @@ export async function generateScoutCard({
   const summary = normalizeResearchSummary(draft);
   const card = buildScoutCardFromResearch(summary);
 
-  return { card, brief, documents, draft, summary };
+  return { card, brief, documents, draft, summary, contentPreview };
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -145,9 +166,12 @@ export async function main(argv = process.argv.slice(2)) {
 
   const raw = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   const brief = parseScoutBrief(raw);
-  const { card, documents, summary } = await generateScoutCard({
+  const fetchers = args.liveWeb ? { ...createMockFetchers(), web: createLiveWebFetcher() } : createMockFetchers();
+  const { card, documents, summary, contentPreview } = await generateScoutCard({
     brief,
     cacheRoot: args.cacheRoot,
+    fetchers,
+    debugContent: args.debugContent,
   });
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
@@ -156,6 +180,9 @@ export async function main(argv = process.argv.slice(2)) {
   console.log("[scout] brief loaded:", brief.keyword);
   console.log("[scout] fetched docs:", documents.length);
   console.log("[scout] warnings:", summary.warnings.length);
+  if (contentPreview) {
+    console.log("[scout] content preview:\n" + contentPreview);
+  }
   console.log("[scout] card written:", outputPath);
   console.log("[scout] card id:", card.cardId);
 }
