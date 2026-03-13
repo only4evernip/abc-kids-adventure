@@ -9,8 +9,11 @@ export function buildRedditComplaintQueries(keyword: string) {
 }
 
 export function extractRedditUrlsFromSearchMarkdown(markdown: string) {
-  const matches = markdown.match(/https?:\/\/(?:www\.)?reddit\.com\/r\/[^\s)]+/g) || [];
-  return [...new Set(matches.map((url) => url.replace(/[)>.,]+$/g, "")))];
+  const matches = markdown.match(/https?:\/\/(?:www\.)?reddit\.com\/r\/[A-Za-z0-9_]+\/comments\/[^\s)]+/g) || [];
+  const cleaned = matches
+    .map((url) => url.replace(/[)>.,]+$/g, ""))
+    .filter((url) => !/[?&](login|signup)=/i.test(url));
+  return [...new Set(cleaned)];
 }
 
 export function cleanRedditThread(raw: string, options?: { maxChars?: number }) {
@@ -36,6 +39,7 @@ export async function discoverRedditThreads(
   keyword: string,
   deps: {
     fetchSearchMarkdown: (query: string) => Promise<string>;
+    fetchSearchMarkdownFallback?: (query: string) => Promise<string>;
     pickQueries?: (queries: string[]) => string[];
     limit?: number;
   }
@@ -45,7 +49,13 @@ export async function discoverRedditThreads(
   const urls: string[] = [];
 
   for (const query of selectedQueries) {
-    const markdown = await deps.fetchSearchMarkdown(query);
+    let markdown: string;
+    try {
+      markdown = await deps.fetchSearchMarkdown(query);
+    } catch (error) {
+      if (!deps.fetchSearchMarkdownFallback) throw error;
+      markdown = await deps.fetchSearchMarkdownFallback(query);
+    }
     urls.push(...extractRedditUrlsFromSearchMarkdown(markdown));
   }
 

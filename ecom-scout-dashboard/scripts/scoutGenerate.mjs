@@ -92,6 +92,11 @@ export function createLiveRedditFetcher() {
         }
         return response.text();
       },
+      fetchSearchMarkdownFallback: async (query) => {
+        const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10&hl=en`;
+        const doc = await fetchDocumentWithJina(googleUrl);
+        return doc.content;
+      },
       pickQueries: (queries) => queries.slice(0, 2),
       limit: 3,
     });

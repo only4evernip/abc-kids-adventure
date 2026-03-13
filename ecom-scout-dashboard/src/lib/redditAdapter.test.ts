@@ -64,4 +64,18 @@ Some snippet here.
       "https://www.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/",
     ]);
   });
+
+  it("falls back to alternate search fetcher when primary discovery fails", async () => {
+    const urls = await discoverRedditThreads("posture corrector", {
+      fetchSearchMarkdown: async () => {
+        throw new Error("401");
+      },
+      fetchSearchMarkdownFallback: async () =>
+        `[Google result](https://www.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/)`,
+      pickQueries: (queries) => queries.slice(0, 1),
+      limit: 5,
+    });
+
+    expect(urls).toEqual(["https://www.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/"]);
+  });
 });
