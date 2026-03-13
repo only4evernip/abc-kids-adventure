@@ -11,7 +11,7 @@
     "test": "vitest run",
     "build:sync": "tsc -p tsconfig.sync.json",
     "sync:feishu": "node scripts/syncFeishu.mjs",
-    "scout:generate": "node --experimental-strip-types --experimental-specifier-resolution=node scripts/scoutGenerate.mjs"
+    "scout:generate": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --experimental-strip-types --experimental-specifier-resolution=node scripts/scoutGenerate.mjs"
   },
   "dependencies": {
     "react": "^19.0.0",
