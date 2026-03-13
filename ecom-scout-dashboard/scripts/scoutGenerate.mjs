@@ -7,6 +7,7 @@ import { normalizeResearchSummary } from "../src/lib/scoutResearch.ts";
 import { buildScoutCardFromResearch } from "../src/lib/scoutCard.ts";
 import { summarizeResearchDraft } from "../src/lib/scoutSummarizer.ts";
 import { createOpenAiCompatibleLlmClient, getLlmConfigFromEnv } from "../src/lib/scoutLlmAdapter.ts";
+import { createGeminiLlmClient, getGeminiConfigFromEnv } from "../src/lib/scoutGeminiAdapter.ts";
 import { fetchDocumentWithJina } from "../src/lib/scoutWebAdapter.ts";
 
 export function parseArgs(argv) {
@@ -16,6 +17,7 @@ export function parseArgs(argv) {
     cacheRoot: "scout-cache",
     liveWeb: false,
     liveLlm: false,
+    liveGemini: false,
     debugContent: false,
   };
 
@@ -26,6 +28,7 @@ export function parseArgs(argv) {
     if (arg === "--cache-root") args.cacheRoot = argv[i + 1];
     if (arg === "--live-web") args.liveWeb = true;
     if (arg === "--live-llm") args.liveLlm = true;
+    if (arg === "--live-gemini") args.liveGemini = true;
     if (arg === "--debug-content") args.debugContent = true;
   }
 
@@ -170,11 +173,26 @@ export async function main(argv = process.argv.slice(2)) {
   const raw = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   const brief = parseScoutBrief(raw);
   const fetchers = args.liveWeb ? { ...createMockFetchers(), web: createLiveWebFetcher() } : createMockFetchers();
-  const llmConfig = args.liveLlm ? getLlmConfigFromEnv() : null;
-  if (args.liveLlm && !llmConfig) {
+
+  if (args.liveLlm && args.liveGemini) {
+    throw new Error("choose only one live LLM adapter: --live-llm or --live-gemini");
+  }
+
+  const openAiConfig = args.liveLlm ? getLlmConfigFromEnv() : null;
+  if (args.liveLlm && !openAiConfig) {
     throw new Error("live LLM requested but no OPENAI_API_KEY / LLM_API_KEY is configured");
   }
-  const llmClient = llmConfig ? createOpenAiCompatibleLlmClient(llmConfig) : createMockLlmClient();
+
+  const geminiConfig = args.liveGemini ? getGeminiConfigFromEnv() : null;
+  if (args.liveGemini && !geminiConfig) {
+    throw new Error("live Gemini requested but no GEMINI_API_KEY is configured");
+  }
+
+  const llmClient = openAiConfig
+    ? createOpenAiCompatibleLlmClient(openAiConfig)
+    : geminiConfig
+      ? createGeminiLlmClient(geminiConfig)
+      : createMockLlmClient();
   const { card, documents, summary, contentPreview } = await generateScoutCard({
     brief,
     cacheRoot: args.cacheRoot,
