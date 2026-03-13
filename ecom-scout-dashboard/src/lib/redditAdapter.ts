@@ -20,6 +20,7 @@ export function cleanRedditThread(raw: string, options?: { maxChars?: number }) 
   text = text
     .replace(/^>.*$/gm, "")
     .replace(/^\*.*(?:replying to|hours ago|days ago|minutes ago).*\*$/gim, "")
+    .replace(/^\*\s*$/gm, "")
     .replace(/^\[[^\]]+\]:\s*.*$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -31,5 +32,22 @@ export function cleanRedditThread(raw: string, options?: { maxChars?: number }) 
   return text;
 }
 
-// TODO: integrate real search for web/reddit result discovery instead of hardcoded seed URLs.
-// TODO: add searchRedditComplaints(keyword) using Google/Jina result pages as a low-cost Reddit discovery path.
+export async function discoverRedditThreads(
+  keyword: string,
+  deps: {
+    fetchSearchMarkdown: (query: string) => Promise<string>;
+    pickQueries?: (queries: string[]) => string[];
+    limit?: number;
+  }
+) {
+  const queries = buildRedditComplaintQueries(keyword);
+  const selectedQueries = deps.pickQueries ? deps.pickQueries(queries) : queries.slice(0, 2);
+  const urls: string[] = [];
+
+  for (const query of selectedQueries) {
+    const markdown = await deps.fetchSearchMarkdown(query);
+    urls.push(...extractRedditUrlsFromSearchMarkdown(markdown));
+  }
+
+  return [...new Set(urls)].slice(0, deps.limit ?? 5);
+}

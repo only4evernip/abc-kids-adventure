@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRedditComplaintQueries, cleanRedditThread, extractRedditUrlsFromSearchMarkdown } from "./redditAdapter";
+import { buildRedditComplaintQueries, cleanRedditThread, discoverRedditThreads, extractRedditUrlsFromSearchMarkdown } from "./redditAdapter";
 
 describe("redditAdapter", () => {
   it("builds poisoned reddit complaint queries from keyword", () => {
@@ -37,7 +37,7 @@ Some snippet here.
   });
 
   it("cleans reddit thread markdown noise while keeping complaint content", () => {
-    const raw = `# Posture corrector regret\n\n> quoted previous reply\n\n*replying to user123 2 hours ago*\n\nI stopped using mine after 3 days because it was bulky and uncomfortable.\n\n> another quote\n\nWaste of money for me.`;
+    const raw = `# Posture corrector regret\n\n> quoted previous reply\n\n*replying to user123 2 hours ago*\n\n*\n\nI stopped using mine after 3 days because it was bulky and uncomfortable.\n\n> another quote\n\nWaste of money for me.`;
 
     const cleaned = cleanRedditThread(raw);
 
@@ -45,5 +45,23 @@ Some snippet here.
     expect(cleaned).toContain("Waste of money for me.");
     expect(cleaned).not.toContain("> quoted previous reply");
     expect(cleaned).not.toContain("*replying to user123 2 hours ago*");
+  });
+
+  it("discovers reddit threads from selected poisoned queries", async () => {
+    const urls = await discoverRedditThreads("posture corrector", {
+      fetchSearchMarkdown: async (query) => {
+        if (query.includes("waste of money")) {
+          return `[Waste of money?](https://www.reddit.com/r/BackPain/comments/def456/waste_of_money/)`;
+        }
+        return `[Stopped using after 3 days](https://www.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/)`;
+      },
+      pickQueries: (queries) => queries.slice(1, 3),
+      limit: 5,
+    });
+
+    expect(urls).toEqual([
+      "https://www.reddit.com/r/BackPain/comments/def456/waste_of_money/",
+      "https://www.reddit.com/r/Posture/comments/abc123/posture_corrector_regret/",
+    ]);
   });
 });

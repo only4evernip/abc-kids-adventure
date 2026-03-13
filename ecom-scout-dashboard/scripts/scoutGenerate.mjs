@@ -8,6 +8,7 @@ import { buildScoutCardFromResearch } from "../src/lib/scoutCard.ts";
 import { summarizeResearchDraft } from "../src/lib/scoutSummarizer.ts";
 import { createOpenAiCompatibleLlmClient, getLlmConfigFromEnv } from "../src/lib/scoutLlmAdapter.ts";
 import { createGeminiLlmClient, getGeminiConfigFromEnv } from "../src/lib/scoutGeminiAdapter.ts";
+import { cleanRedditThread, discoverRedditThreads } from "../src/lib/redditAdapter.ts";
 import { fetchDocumentWithJina } from "../src/lib/scoutWebAdapter.ts";
 
 export function parseArgs(argv) {
@@ -67,6 +68,7 @@ export function createMockFetchers() {
 export function createLiveWebFetcher() {
   return async (brief) =>
     fetchWebEvidence(brief, {
+      // TODO: integrate real search for general web result discovery instead of hardcoded seed URLs.
       searchWeb: async () => [
         {
           url: "https://www.healthline.com/health/best-posture-corrector",
@@ -75,6 +77,45 @@ export function createLiveWebFetcher() {
       ],
       fetchDocument: (url) => fetchDocumentWithJina(url),
     });
+}
+
+export function createLiveRedditFetcher() {
+  return async (brief) => {
+    const urls = await discoverRedditThreads(brief.keyword, {
+      fetchSearchMarkdown: async (query) => {
+        const searchUrl = `https://s.jina.ai/${encodeURIComponent(query)}`;
+        const response = await fetch(searchUrl, {
+          headers: { "X-Respond-With": "no-content" },
+        });
+        if (!response.ok) {
+          throw new Error(`Jina reddit discovery failed with status: ${response.status}`);
+        }
+        return response.text();
+      },
+      pickQueries: (queries) => queries.slice(0, 2),
+      limit: 3,
+    });
+
+    const documents = [];
+    for (const url of urls) {
+      const doc = await fetchDocumentWithJina(url);
+      const content = cleanRedditThread(doc.content);
+      if (!content.trim()) continue;
+      const subredditMatch = url.match(/reddit\.com\/r\/([^/]+)/i);
+      documents.push({
+        sourceType: "reddit",
+        sourceName: subredditMatch ? `Reddit/r/${subredditMatch[1]}` : "Reddit",
+        sourceUrl: url,
+        title: doc.title || url,
+        fetchedAt: new Date().toISOString(),
+        keyword: brief.keyword,
+        market: brief.market,
+        content,
+      });
+    }
+
+    return documents;
+  };
 }
 
 export function createMockLlmClient() {
@@ -172,7 +213,9 @@ export async function main(argv = process.argv.slice(2)) {
 
   const raw = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   const brief = parseScoutBrief(raw);
-  const fetchers = args.liveWeb ? { ...createMockFetchers(), web: createLiveWebFetcher() } : createMockFetchers();
+  const fetchers = args.liveWeb
+    ? { ...createMockFetchers(), web: createLiveWebFetcher(), reddit: createLiveRedditFetcher() }
+    : createMockFetchers();
 
   if (args.liveLlm && args.liveGemini) {
     throw new Error("choose only one live LLM adapter: --live-llm or --live-gemini");
