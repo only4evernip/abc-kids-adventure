@@ -8,8 +8,6 @@ import { buildScoutCardFromResearch } from "../src/lib/scoutCard.ts";
 import { summarizeResearchDraft } from "../src/lib/scoutSummarizer.ts";
 import { createOpenAiCompatibleLlmClient, getLlmConfigFromEnv } from "../src/lib/scoutLlmAdapter.ts";
 import { createGeminiLlmClient, getGeminiConfigFromEnv } from "../src/lib/scoutGeminiAdapter.ts";
-import { buildAmazonCriticalReviewsUrl, cleanAmazonReviewsMarkdown, extractAmazonAsin } from "../src/lib/amazonAdapter.ts";
-import { cleanRedditThread, discoverRedditThreads } from "../src/lib/redditAdapter.ts";
 import { fetchDocumentWithJina } from "../src/lib/scoutWebAdapter.ts";
 
 export function parseArgs(argv) {
@@ -66,14 +64,11 @@ export function createMockFetchers() {
   };
 }
 
-const HARDCODED_AMAZON_PRODUCT_SEEDS = [
-  "https://www.amazon.com/Posture-Corrector-Men-Women-Truweo/dp/B07DKHTKP3/",
-];
-
 export function createLiveWebFetcher() {
   return async (brief) =>
     fetchWebEvidence(brief, {
       // TODO: integrate real search for general web result discovery instead of hardcoded seed URLs.
+      // See ADR: docs/decisions/002-v1.2-negative-evidence-discovery.md
       searchWeb: async () => [
         {
           url: "https://www.healthline.com/health/best-posture-corrector",
@@ -82,124 +77,6 @@ export function createLiveWebFetcher() {
       ],
       fetchDocument: (url) => fetchDocumentWithJina(url),
     });
-}
-
-export function createLiveAmazonFetcher(options = { debug: false }) {
-  return async (brief) => {
-    const documents = [];
-
-    for (const productUrl of HARDCODED_AMAZON_PRODUCT_SEEDS) {
-      const asin = extractAmazonAsin(productUrl);
-      if (!asin) continue;
-      const reviewUrl = buildAmazonCriticalReviewsUrl(asin);
-      try {
-        if (options.debug) {
-          console.log("[amazon-fetch] Starting fetch for:", reviewUrl);
-        }
-        const doc = await fetchDocumentWithJina(reviewUrl);
-        const content = cleanAmazonReviewsMarkdown(doc.content);
-        if (options.debug) {
-          console.log("[amazon-fetch] Status: 200");
-          console.log("[amazon-fetch] Cleaned Content Length:", content.length);
-        }
-        if (!content.trim()) continue;
-        documents.push({
-          sourceType: "amazon",
-          sourceName: "Amazon",
-          sourceUrl: reviewUrl,
-          title: doc.title || reviewUrl,
-          fetchedAt: new Date().toISOString(),
-          keyword: brief.keyword,
-          market: brief.market,
-          content,
-        });
-      } catch (error) {
-        if (options.debug) {
-          console.log("[amazon-fetch] Status:", error instanceof Error ? error.message : String(error));
-        }
-      }
-    }
-
-    if (options.debug) {
-      console.log("[amazon-fetch] retained documents:", documents.map((doc) => doc.sourceUrl));
-    }
-    return documents;
-  };
-}
-
-const HARDCODED_REDDIT_SEEDS = [
-  "https://old.reddit.com/r/backpain/comments/fshq8y/posture_correctors_do_they_actually_work/",
-  "https://old.reddit.com/r/stretching/comments/16v2g9c/posture_correctors_the_good_the_bad_the_ugly/",
-  "https://old.reddit.com/r/Posture/comments/8o6xly/do_posture_correctors_work/",
-];
-
-export function createLiveRedditFetcher(options = { debug: false, seedMode: true }) {
-  return async (brief) => {
-    const urls = options.seedMode
-      ? HARDCODED_REDDIT_SEEDS
-      : await discoverRedditThreads(brief.keyword, {
-          fetchSearchMarkdown: async (query) => {
-            const searchUrl = `https://s.jina.ai/${encodeURIComponent(query)}`;
-            const response = await fetch(searchUrl, {
-              headers: { "X-Respond-With": "no-content" },
-            });
-            if (!response.ok) {
-              throw new Error(`Jina reddit discovery failed with status: ${response.status}`);
-            }
-            return response.text();
-          },
-          fetchSearchMarkdownFallback: async (query) => {
-            const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=10&hl=en`;
-            const doc = await fetchDocumentWithJina(googleUrl);
-            return doc.content;
-          },
-          pickQueries: (queries) => queries.slice(0, 2),
-          limit: 3,
-          debug: options.debug,
-        });
-
-    const documents = [];
-    for (const url of urls) {
-      try {
-        if (options.debug) {
-          console.log("[reddit-fetch] Starting fetch for:", url);
-        }
-        const doc = await fetchDocumentWithJina(url);
-        const content = cleanRedditThread(doc.content);
-        if (options.debug) {
-          console.log("[reddit-fetch] Status: 200");
-          console.log("[reddit-fetch] Cleaned Content Length:", content.length);
-        }
-        if (!content.trim()) {
-          if (options.debug) {
-            console.log("[reddit-fetch] dropped empty cleaned content:", url);
-          }
-          continue;
-        }
-        const subredditMatch = url.match(/reddit\.com\/r\/([^/]+)/i);
-        documents.push({
-          sourceType: "reddit",
-          sourceName: subredditMatch ? `Reddit/r/${subredditMatch[1]}` : "Reddit",
-          sourceUrl: url,
-          title: doc.title || url,
-          fetchedAt: new Date().toISOString(),
-          keyword: brief.keyword,
-          market: brief.market,
-          content,
-        });
-      } catch (error) {
-        if (options.debug) {
-          console.log("[reddit-fetch] Status:", error instanceof Error ? error.message : String(error));
-          console.log("[reddit-fetch] failed url:", url, error instanceof Error ? error.message : String(error));
-        }
-      }
-    }
-
-    if (options.debug) {
-      console.log("[reddit-fetch] retained documents:", documents.map((doc) => doc.sourceUrl));
-    }
-    return documents;
-  };
 }
 
 export function createMockLlmClient() {
@@ -297,10 +174,9 @@ export async function main(argv = process.argv.slice(2)) {
 
   const raw = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   const brief = parseScoutBrief(raw);
-  const baseFetchers = args.liveWeb
-    ? { ...createMockFetchers(), web: createLiveWebFetcher(), reddit: createLiveRedditFetcher({ debug: args.debugContent, seedMode: true }) }
+  const fetchers = args.liveWeb
+    ? { ...createMockFetchers(), web: createLiveWebFetcher() }
     : createMockFetchers();
-  const amazonDocs = args.liveWeb ? await createLiveAmazonFetcher({ debug: args.debugContent })(brief) : [];
 
   if (args.liveLlm && args.liveGemini) {
     throw new Error("choose only one live LLM adapter: --live-llm or --live-gemini");
@@ -324,10 +200,7 @@ export async function main(argv = process.argv.slice(2)) {
   const { card, documents, summary, contentPreview } = await generateScoutCard({
     brief,
     cacheRoot: args.cacheRoot,
-    fetchers: {
-      ...baseFetchers,
-      reddit: async (inputBrief) => [...(await baseFetchers.reddit(inputBrief)), ...amazonDocs],
-    },
+    fetchers,
     llmClient,
     debugContent: args.debugContent,
   });

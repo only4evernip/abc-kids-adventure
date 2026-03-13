@@ -1,3 +1,5 @@
+// See ADR: docs/decisions/002-v1.2-negative-evidence-discovery.md
+// Public Jina paths are good for open web pages, but not sufficient for deep protected review/comment surfaces.
 interface FetchLikeResponse {
   ok: boolean;
   status: number;

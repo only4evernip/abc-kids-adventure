@@ -1,3 +1,5 @@
+// Experimental negative-evidence discovery work is documented in:
+// docs/decisions/002-v1.2-negative-evidence-discovery.md
 export function extractAmazonAsin(url: string) {
   const match = url.match(/\/dp\/([A-Z0-9]{10})/i) || url.match(/\/product-reviews\/([A-Z0-9]{10})/i);
   return match?.[1]?.toUpperCase() || null;

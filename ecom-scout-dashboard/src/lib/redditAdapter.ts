@@ -1,3 +1,5 @@
+// Experimental negative-evidence discovery work is documented in:
+// docs/decisions/002-v1.2-negative-evidence-discovery.md
 export function buildRedditComplaintQueries(keyword: string) {
   const cleanKeyword = keyword.trim();
   return [
