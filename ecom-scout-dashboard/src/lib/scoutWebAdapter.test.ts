@@ -22,6 +22,52 @@ This is the real article body.`;
     expect(cleaned.startsWith("# 4 Best Posture Correctors")).toBe(true);
   });
 
+  it("top-cuts noisy prelude before the first real heading", () => {
+    const raw = `Home > Health > Posture
+* Men
+* Women
+
+# 4 Best Posture Correctors
+
+Real body starts here.`;
+
+    const cleaned = cleanJinaMarkdown(raw);
+
+    expect(cleaned.startsWith("# 4 Best Posture Correctors")).toBe(true);
+    expect(cleaned).not.toContain("Home > Health > Posture");
+    expect(cleaned).not.toContain("* Men");
+  });
+
+  it("bottom-cuts tail clutter once footer markers appear", () => {
+    const raw = `# 4 Best Posture Correctors
+
+Useful article body.
+
+## Related Stories
+1. Article A
+2. Article B`;
+
+    const cleaned = cleanJinaMarkdown(raw);
+
+    expect(cleaned).toContain("Useful article body.");
+    expect(cleaned).not.toContain("Related Stories");
+    expect(cleaned).not.toContain("Article A");
+  });
+
+  it("falls back safely when no heading or footer marker exists", () => {
+    const raw = `Plain text page with no markdown heading.
+
+![Hero](https://example.com/a.png)
+
+Still useful body.`;
+
+    const cleaned = cleanJinaMarkdown(raw, { maxChars: 500 });
+
+    expect(cleaned).toContain("Plain text page with no markdown heading.");
+    expect(cleaned).toContain("Still useful body.");
+    expect(cleaned).not.toContain("![Hero]");
+  });
+
   it("strips image markdown, compresses excessive blank lines, and removes link-only clutter lines", () => {
     const raw = `# Article Title
 

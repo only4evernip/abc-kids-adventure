@@ -4,6 +4,36 @@ interface FetchLikeResponse {
   text(): Promise<string>;
 }
 
+const FOOTER_MARKERS = [
+  /^#{1,6}\s+Related Stories\s*$/im,
+  /^#{1,6}\s+Read More\s*$/im,
+  /^#{1,6}\s+Newsletter\s*$/im,
+  /^#{1,6}\s+References\s*$/im,
+  /^#{1,6}\s+Leave a Reply\s*$/im,
+  /^related stories\s*$/im,
+  /^read more\s*$/im,
+  /^newsletter\s*$/im,
+  /^references\s*$/im,
+  /^leave a reply\s*$/im,
+];
+
+function cutTopPrelude(text: string) {
+  const headingMatch = text.match(/^(#{1,2}\s+.+|.+\n=+)$/m);
+  if (!headingMatch || headingMatch.index === undefined) return text;
+  return text.slice(headingMatch.index).trimStart();
+}
+
+function cutBottomTail(text: string) {
+  let end = text.length;
+  for (const marker of FOOTER_MARKERS) {
+    const match = marker.exec(text);
+    if (match && match.index !== undefined) {
+      end = Math.min(end, match.index);
+    }
+  }
+  return text.slice(0, end).trimEnd();
+}
+
 export function cleanJinaMarkdown(raw: string, options?: { maxChars?: number }) {
   const maxChars = options?.maxChars ?? 15000;
   let text = raw.replace(/\r\n/g, "\n");
@@ -19,10 +49,14 @@ export function cleanJinaMarkdown(raw: string, options?: { maxChars?: number }) 
     .replace(/^URL Source:\s.*$/gm, "")
     .replace(/^Published Time:\s.*$/gm, "")
     .replace(/^Warning:\s.*$/gm, "")
-    .replace(/^![^\n]*$/gm, "")
+    .replace(/^!\[[^\]]*\]\([^\)]+\)\s*$/gm, "")
     .replace(/^\[[^\]]*\]\([^\)]+\)\s*$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  text = cutTopPrelude(text);
+  text = cutBottomTail(text);
+  text = text.replace(/\n{3,}/g, "\n\n").trim();
 
   if (text.length > maxChars) {
     text = text.slice(0, maxChars).trimEnd();
