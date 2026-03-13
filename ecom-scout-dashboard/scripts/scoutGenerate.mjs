@@ -8,6 +8,7 @@ import { buildScoutCardFromResearch } from "../src/lib/scoutCard.ts";
 import { summarizeResearchDraft } from "../src/lib/scoutSummarizer.ts";
 import { createOpenAiCompatibleLlmClient, getLlmConfigFromEnv } from "../src/lib/scoutLlmAdapter.ts";
 import { createGeminiLlmClient, getGeminiConfigFromEnv } from "../src/lib/scoutGeminiAdapter.ts";
+import { buildAmazonCriticalReviewsUrl, cleanAmazonReviewsMarkdown, extractAmazonAsin } from "../src/lib/amazonAdapter.ts";
 import { cleanRedditThread, discoverRedditThreads } from "../src/lib/redditAdapter.ts";
 import { fetchDocumentWithJina } from "../src/lib/scoutWebAdapter.ts";
 
@@ -65,6 +66,10 @@ export function createMockFetchers() {
   };
 }
 
+const HARDCODED_AMAZON_PRODUCT_SEEDS = [
+  "https://www.amazon.com/Posture-Corrector-Men-Women-Truweo/dp/B07DKHTKP3/",
+];
+
 export function createLiveWebFetcher() {
   return async (brief) =>
     fetchWebEvidence(brief, {
@@ -77,6 +82,49 @@ export function createLiveWebFetcher() {
       ],
       fetchDocument: (url) => fetchDocumentWithJina(url),
     });
+}
+
+export function createLiveAmazonFetcher(options = { debug: false }) {
+  return async (brief) => {
+    const documents = [];
+
+    for (const productUrl of HARDCODED_AMAZON_PRODUCT_SEEDS) {
+      const asin = extractAmazonAsin(productUrl);
+      if (!asin) continue;
+      const reviewUrl = buildAmazonCriticalReviewsUrl(asin);
+      try {
+        if (options.debug) {
+          console.log("[amazon-fetch] Starting fetch for:", reviewUrl);
+        }
+        const doc = await fetchDocumentWithJina(reviewUrl);
+        const content = cleanAmazonReviewsMarkdown(doc.content);
+        if (options.debug) {
+          console.log("[amazon-fetch] Status: 200");
+          console.log("[amazon-fetch] Cleaned Content Length:", content.length);
+        }
+        if (!content.trim()) continue;
+        documents.push({
+          sourceType: "amazon",
+          sourceName: "Amazon",
+          sourceUrl: reviewUrl,
+          title: doc.title || reviewUrl,
+          fetchedAt: new Date().toISOString(),
+          keyword: brief.keyword,
+          market: brief.market,
+          content,
+        });
+      } catch (error) {
+        if (options.debug) {
+          console.log("[amazon-fetch] Status:", error instanceof Error ? error.message : String(error));
+        }
+      }
+    }
+
+    if (options.debug) {
+      console.log("[amazon-fetch] retained documents:", documents.map((doc) => doc.sourceUrl));
+    }
+    return documents;
+  };
 }
 
 const HARDCODED_REDDIT_SEEDS = [
@@ -249,9 +297,10 @@ export async function main(argv = process.argv.slice(2)) {
 
   const raw = JSON.parse(fs.readFileSync(inputPath, "utf8"));
   const brief = parseScoutBrief(raw);
-  const fetchers = args.liveWeb
+  const baseFetchers = args.liveWeb
     ? { ...createMockFetchers(), web: createLiveWebFetcher(), reddit: createLiveRedditFetcher({ debug: args.debugContent, seedMode: true }) }
     : createMockFetchers();
+  const amazonDocs = args.liveWeb ? await createLiveAmazonFetcher({ debug: args.debugContent })(brief) : [];
 
   if (args.liveLlm && args.liveGemini) {
     throw new Error("choose only one live LLM adapter: --live-llm or --live-gemini");
@@ -275,7 +324,10 @@ export async function main(argv = process.argv.slice(2)) {
   const { card, documents, summary, contentPreview } = await generateScoutCard({
     brief,
     cacheRoot: args.cacheRoot,
-    fetchers,
+    fetchers: {
+      ...baseFetchers,
+      reddit: async (inputBrief) => [...(await baseFetchers.reddit(inputBrief)), ...amazonDocs],
+    },
     llmClient,
     debugContent: args.debugContent,
   });
