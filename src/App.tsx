@@ -128,8 +128,8 @@ export default function App() {
   const renderLearn = () => {
     const item = ALPHABET_DATA[currentIndex];
     return (
-      <div className="flex flex-col h-full p-6 lg:p-10">
-        <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col min-h-full p-4 lg:p-6 xl:p-8">
+        <div className="flex justify-between items-center mb-4 lg:mb-6 shrink-0">
           <button onClick={() => setMode('welcome')} className="p-4 bg-white rounded-full shadow-md text-slate-400 hover:text-sky-500 transition-colors">
             <Home size={32} />
           </button>
@@ -141,31 +141,31 @@ export default function App() {
           </button>
         </div>
 
-        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-10 lg:gap-20">
+        <div className="flex-1 flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-10 min-h-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={item.letter}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="w-full max-w-2xl aspect-video lg:aspect-square flex flex-col items-center justify-center"
+              className="w-full max-w-2xl aspect-[4/5] sm:aspect-video lg:aspect-square flex flex-col items-center justify-center min-h-0"
             >
-              <div className={`kid-card w-full h-full flex flex-col items-center justify-center relative overflow-hidden p-8`}>
+              <div className={`kid-card w-full h-full flex flex-col items-center justify-center relative overflow-hidden p-4 sm:p-6 lg:p-8`}>
                 <div className={`absolute top-0 left-0 w-full h-6 ${item.color}`} />
                 
-                <div className="flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16">
+                <div className="flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-12">
                   <button 
                     onClick={() => speak(item.letter)}
-                    className="text-[12rem] lg:text-[16rem] font-bold text-slate-800 leading-none btn-bubble"
+                    className="text-[7rem] sm:text-[9rem] md:text-[10rem] lg:text-[16rem] font-bold text-slate-800 leading-none btn-bubble"
                   >
-                    {item.letter}<span className="text-slate-400 text-7xl lg:text-9xl">{item.letter.toLowerCase()}</span>
+                    {item.letter}<span className="text-slate-400 text-4xl sm:text-5xl md:text-6xl lg:text-9xl">{item.letter.toLowerCase()}</span>
                   </button>
                   
                   <div className="flex flex-col items-center">
-                    <div className="text-[10rem] lg:text-[14rem] mb-4 animate-float">{item.emoji}</div>
+                    <div className="text-[5rem] sm:text-[6rem] md:text-[7rem] lg:text-[14rem] mb-2 lg:mb-4 animate-float">{item.emoji}</div>
                     <button 
                       onClick={() => speak(item.word)}
-                      className="text-5xl lg:text-7xl font-bold text-slate-600 btn-bubble"
+                      className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-bold text-slate-600 btn-bubble"
                     >
                       {item.word}
                     </button>
@@ -176,27 +176,27 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        <div className="flex justify-between items-center gap-8 mt-10 pb-6">
+        <div className="flex justify-between items-center gap-4 sm:gap-6 lg:gap-8 mt-4 lg:mt-8 pb-2 lg:pb-4 shrink-0">
           <button 
             onClick={handlePrev}
             disabled={currentIndex === 0}
-            className={`w-24 h-24 lg:w-32 lg:h-32 rounded-full shadow-xl flex items-center justify-center btn-bubble ${currentIndex === 0 ? 'bg-slate-200 text-slate-400' : 'bg-white text-sky-500'}`}
+            className={`w-16 h-16 sm:w-20 sm:h-20 lg:w-32 lg:h-32 rounded-full shadow-xl flex items-center justify-center btn-bubble ${currentIndex === 0 ? 'bg-slate-200 text-slate-400' : 'bg-white text-sky-500'}`}
           >
-            <ChevronLeft size={64} />
+            <ChevronLeft size={40} className="lg:w-16 lg:h-16" />
           </button>
           
           <button 
             onClick={() => speak(`${item.letter} is for ${item.word}`)}
-            className="w-28 h-28 lg:w-40 lg:h-40 bg-sky-500 text-white rounded-full shadow-2xl flex items-center justify-center btn-bubble"
+            className="w-20 h-20 sm:w-24 sm:h-24 lg:w-40 lg:h-40 bg-sky-500 text-white rounded-full shadow-2xl flex items-center justify-center btn-bubble shrink-0"
           >
-            <Volume2 size={56} />
+            <Volume2 size={36} className="lg:w-14 lg:h-14" />
           </button>
 
           <button 
             onClick={handleNext}
-            className="w-24 h-24 lg:w-32 lg:h-32 bg-emerald-400 text-white rounded-full shadow-xl flex items-center justify-center btn-bubble"
+            className="w-16 h-16 sm:w-20 sm:h-20 lg:w-32 lg:h-32 bg-emerald-400 text-white rounded-full shadow-xl flex items-center justify-center btn-bubble shrink-0"
           >
-            <ChevronRight size={64} />
+            <ChevronRight size={40} className="lg:w-16 lg:h-16" />
           </button>
         </div>
       </div>
@@ -294,13 +294,13 @@ export default function App() {
   );
 
   return (
-    <div className="h-screen w-full bg-sky-50 relative overflow-hidden font-sans">
+    <div className="min-h-screen h-[100dvh] w-full bg-sky-50 relative overflow-x-hidden overflow-y-auto font-sans">
       {/* Background Decorations */}
       <div className="absolute -top-40 -left-40 w-96 h-96 bg-yellow-200 rounded-full blur-[100px] opacity-40 pointer-events-none" />
       <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-pink-200 rounded-full blur-[100px] opacity-40 pointer-events-none" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-sky-200 rounded-full blur-[150px] opacity-20 pointer-events-none" />
       
-      <main className="h-full relative z-10 max-w-[1920px] mx-auto">
+      <main className="min-h-full relative z-10 max-w-[1920px] mx-auto">
         {mode === 'welcome' && renderWelcome()}
         {mode === 'learn' && renderLearn()}
         {mode === 'quiz' && renderQuiz()}
