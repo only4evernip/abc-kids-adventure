@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Fredoka", ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  @apply bg-sky-50 text-slate-800 overflow-hidden touch-none;
+}
+
+.kid-card {
+  @apply bg-white rounded-[2rem] shadow-xl border-4 border-white;
+}
+
+.btn-bubble {
+  @apply transition-transform active:scale-90 hover:scale-105;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
